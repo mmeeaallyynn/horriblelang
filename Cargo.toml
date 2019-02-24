@@ -1,0 +1,8 @@
+[package]
+name = "notherlang"
+version = "0.1.0"
+authors = ["mdmn99 <merlin.mengel@mni.thm.de>"]
+edition = "2018"
+
+[dependencies]
+regex = "1"

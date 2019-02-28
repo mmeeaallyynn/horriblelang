@@ -12,14 +12,14 @@ fibonacci is
 		@b! @a put
 		@result! @b put
 
-		@counter @std.dec!
+		@counter @std::dec!
 
 		@counter! 0 > then {
 			@loop!
-		} @std.if!
+		} @std::if!
 	} @loop!
 
 	@result!
 in
 
-60 @fibonacci! @std.println!
+60 @fibonacci! @std::println!

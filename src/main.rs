@@ -81,7 +81,7 @@ fn run(mut program: Vec<Command>) {
 			Command::Define(v) => {
 				let mut define_new = |s: String| {
 					prefix.push(s.clone());
-					let name = prefix.join(".");
+					let name = prefix.join("::");
 
 					level += 1;
 

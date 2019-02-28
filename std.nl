@@ -11,7 +11,7 @@ std {
 	in
 
 	println is
-		print @std.endl!
+		print @std::endl!
 	in
 
 	dec is

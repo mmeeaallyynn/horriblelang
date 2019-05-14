@@ -10,10 +10,10 @@
 	}
 }
 
-"gunther" @Person.new!
-"Günther" @gunther.name put
+"gunther" @Person::new!
+"Günther" @gunther::name put
 
-"harald" @Person.new!
-"Harald" @harald.name put
+"harald" @Person::new!
+"Harald" @harald::name put
 
-@gunther.name! @std.println!
+@gunther::name! @std::println!

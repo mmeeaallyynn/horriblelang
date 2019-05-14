@@ -5,16 +5,17 @@ use std::env;
 use std::fs::File;
 use std::os::unix::io::FromRawFd;
 use std::io::prelude::*;
+use std::io;
 use regex::Regex;
 
-#[derive(Debug, Clone)]
-enum Visibility {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Visibility {
 	Public,
 	Private
 }
 
-#[derive(Debug, Clone)]
-enum Command {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Command {
 	Pushn(f64),
 	Pushs(String),
 	Define(Visibility),
@@ -38,22 +39,59 @@ enum Command {
 	Swap,
 	Drop,
 	Put,
-	Push,
 	AddressOf,
+	SubProg,
+	Lambda,
+	End,
+	Run,
+	Return,
 
 	Include,
 	PrintStack
 }
 
 #[derive(Debug, Clone)]
-enum StackSlot {
+pub enum StackSlot {
 	Number(f64),
 	String(String),
-	Reference(String, usize)
+	Reference(String, usize),
+	Code(Vec<Command>)
 }
 
+#[derive(Clone)]
 struct Stack {
 	stack: Vec<StackSlot>
+}
+
+#[derive(Clone)]
+struct Environment {
+	prefix: Vec<String>,
+	stack: Stack,
+	definitions: HashMap<String, usize>,
+	program: Vec<Command>,
+	idx: usize
+}
+
+impl Environment {
+	fn new(program: Vec<Command>) -> Self {
+		Environment {
+			prefix: Vec::new(),
+			stack: Stack { stack: Vec::new() },
+			definitions: HashMap::new(),
+			program: program,
+			idx: 0
+		}
+	}
+
+	fn from(mut from: Environment) -> Self {
+		Environment {
+			prefix: from.prefix,
+			stack: from.stack,
+			definitions: from.definitions,
+			program: from.program,
+			idx: from.idx
+		}
+	}
 }
 
 impl Stack {
@@ -66,15 +104,19 @@ impl Stack {
 	}
 }
 
-fn run(mut program: Vec<Command>) {
-	let mut prefix: Vec<String> = Vec::new();
+fn run(env: Environment) -> Result<Environment, &'static str> {
+	let Environment {
+		mut prefix,
+		mut stack,
+		mut definitions,
+		mut program,
+		mut idx
+	} = env;
+
 	let mut execute = true;
 	let mut level = 0;
 
-	let mut stack = Stack { stack: Vec::new() };
 	let mut call_stack: Vec<usize> = Vec::new();
-	let mut definitions: HashMap<String, usize> = HashMap::new();
-	let mut idx: usize = 0;
 
 	while idx < program.len() {
 		match &program[idx] {
@@ -96,10 +138,14 @@ fn run(mut program: Vec<Command>) {
 
 				if let Visibility::Public = v {
 					if let Command::Pushs(string) = &program[idx - 1] { define_new(string.to_string()); execute = false; }
-					else { panic!("public define needs a label") }
+					else {
+						return Err("public define needs a label");
+					}
 				} else if execute {
 					if let StackSlot::String(string) = stack.pop().unwrap() { define_new(string.to_string()); execute = false; }
-					else { panic!("string required for private define") }
+					else {
+						return Err("string required for private define");
+					}
 				}
 			}
 			_ => {}
@@ -135,21 +181,21 @@ fn run(mut program: Vec<Command>) {
 							.expect("unable to read file");
 
 						let result = comment.replace_all(content.as_ref(), "");
-						let mut tokens = lexer(result.to_string());
+						let mut tokens = lexer(result.to_string()).program;
 						tokens.reverse();
 
 						for token in tokens.iter() {
 							program.insert(idx + 1, token.clone());
 						}
 					} else {
-						panic!("expected file name for include");
+						return Err("expected file name for include");
 					}
 				}
 				Command::Pushn(n) => stack.push(StackSlot::Number(*n)),
 				Command::Pushs(s) => {
 					stack.push(StackSlot::String(s.clone()))
 				},
-				Command::EndDefine => if call_stack.len() > 0 {
+				Command::EndDefine | Command::Return => if call_stack.len() > 0 {
 					idx = call_stack.pop().unwrap() as usize;
 				},
 				Command::JmpIf => {
@@ -160,10 +206,12 @@ fn run(mut program: Vec<Command>) {
 								idx = definitions[&n];
 							}
 						} else {
-							panic!("expected number for a conditional jump")
+							return Err("expected number for a conditional jump")
+
 						}
 					} else {
-						panic!("expected reference for a jump");
+						return Err("expected reference for a jump");
+
 					}
 				}
 				Command::Jmp => {
@@ -171,7 +219,7 @@ fn run(mut program: Vec<Command>) {
 						call_stack.push(idx);
 						idx = definitions[&n];
 					} else {
-						panic!("expected reference for a jump");
+						return Err("expected reference for a jump");
 					}
 				}
 				Command::Add => {
@@ -181,7 +229,7 @@ fn run(mut program: Vec<Command>) {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l + r));
 					} else {
-						panic!("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers");
 					}
 				},
 				Command::Sub => {
@@ -191,7 +239,7 @@ fn run(mut program: Vec<Command>) {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l - r));
 					} else {
-						panic!("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers");
 					}
 				},
 				Command::Mul => {
@@ -201,7 +249,7 @@ fn run(mut program: Vec<Command>) {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l * r));
 					} else {
-						panic!("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers");
 					}
 				},
 				Command::Div => {
@@ -211,7 +259,7 @@ fn run(mut program: Vec<Command>) {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l / r));
 					} else {
-						panic!("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers");
 					}
 				},
 				Command::LT => {
@@ -221,7 +269,7 @@ fn run(mut program: Vec<Command>) {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
 					} else {
-						panic!("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers");
 					}
 				},
 				Command::LE => {
@@ -231,7 +279,7 @@ fn run(mut program: Vec<Command>) {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
 					} else {
-						panic!("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers");
 					}
 				},
 				Command::GT => {
@@ -241,7 +289,7 @@ fn run(mut program: Vec<Command>) {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
 					} else {
-						panic!("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers");
 					}
 				},
 				Command::GE => {
@@ -251,7 +299,7 @@ fn run(mut program: Vec<Command>) {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
 					} else {
-						panic!("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers");
 					}
 				},
 				Command::EQ => {
@@ -267,7 +315,9 @@ fn run(mut program: Vec<Command>) {
 							stack.push(StackSlot::Number(0.0)),
 						(StackSlot::Number(_), StackSlot::String(_)) =>
 							stack.push(StackSlot::Number(0.0)),
-						_ => panic!("equal is only supported for Strings and Numbers")
+						_ => {
+							return Err("equal is only supported for Strings and Numbers");
+						}
 					}
 				},
 				Command::NE => {
@@ -283,7 +333,9 @@ fn run(mut program: Vec<Command>) {
 							stack.push(StackSlot::Number(1.0)),
 						(StackSlot::Number(_), StackSlot::String(_)) =>
 							stack.push(StackSlot::Number(1.0)),
-						_ => panic!("not equal is only supported for Strings and Numbers")
+						_ => {
+							return Err("not equal is only supported for Strings and Numbers");
+						}
 					}
 				},
 				Command::Not => {
@@ -315,9 +367,10 @@ fn run(mut program: Vec<Command>) {
 						Some(slot) => match slot {
 							StackSlot::Number(n) => print!("{}", n),
 							StackSlot::String(s) => print!("{}", s.replace("\\n", "\n")),
-							StackSlot::Reference(r, p) => print!("{} -> {}", r, p)
+							StackSlot::Reference(r, p) => print!("{} -> {}", r, p),
+							StackSlot::Code(_) => {}
 						},
-						None => print!("Stack underflow!")
+						None => println!("Stack underflow!")
 					};
 				},
 				Command::Put => {
@@ -325,42 +378,65 @@ fn run(mut program: Vec<Command>) {
 						match stack.pop().unwrap() {
 							StackSlot::Number(n) => program[pos + 1] = Command::Pushn(n),
 							StackSlot::String(s) => program[pos + 1] = Command::Pushs(s),
-							StackSlot::Reference(r, p) => program[pos + 1] = Command::Reference(String::from("@") + r.as_ref())
+							StackSlot::Reference(r, _p) => program[pos + 1] = Command::Reference(String::from("@") + r.as_ref()),
+							StackSlot::Code(_) => {}
 						};
 					} else {
-						panic!("reference required for put");
+						return Err("reference required for put");
 					}
 				},
-				Command::Push => {
-					if let StackSlot::Reference(_, pos) = stack.pop().unwrap() {
-						match stack.pop().unwrap() {
-							StackSlot::Number(n) => program.insert(pos + 1, Command::Pushn(n)),
-							StackSlot::String(s) => program.insert(pos + 1, Command::Pushs(s)),
-							StackSlot::Reference(r, p) => program.insert(pos + 1, Command::Reference(String::from("@") + r.as_ref()))
-						};
-					} else {
-						panic!("reference required for put");
-					}
-				}
 				Command::Reference(s) => {
 					let name: &str = s.split("@").collect::<Vec<&str>>()[1];
 					if definitions.contains_key(name) {
 						stack.push(StackSlot::Reference(String::from(name), definitions[name]));
 					} else {
-						panic!("no symbol \"{}\"", name);
+						return Err("no such symbol");
 					}
-				}
+				},
 				Command::AddressOf => {
 					if let StackSlot::String(name) = stack.pop().unwrap() {
 						let s: &str = name.as_ref();
 						if definitions.contains_key(s) {
 							stack.push(StackSlot::Reference(String::from(s), definitions[s]));
 						} else {
-							panic!("no symbol \"{}\"", name);
+							return Err("no such symbol");
+
 						}
 					} else {
-						panic!("string required");
+						return Err("string required");
 					}
+				},
+				Command::SubProg => {
+					let mut sub_env = Environment::new(program.clone());
+					sub_env.idx = idx + 1;
+					sub_env.prefix = prefix.clone();
+					sub_env.definitions = definitions.clone();
+
+					match run(sub_env) {
+						Ok(result) => {
+							idx = result.idx;
+							if let Some(stack_slot) = result.stack.stack.last() {
+								stack.push(stack_slot.clone());
+							}
+						},
+						Err(err) =>
+							println!("error in sub: {}", err)
+					}
+				},
+				Command::Run => {
+				}
+				Command::Lambda => {
+					let mut lambda_prog: Vec<Command> = Vec::new();
+					idx += 1;
+					while program[idx] != Command::End {
+						lambda_prog.push(program[idx].clone());
+						idx += 1;
+					}
+
+					stack.push(StackSlot::Code(lambda_prog));
+				}
+				Command::End => {
+					break;
 				}
 				Command::PrintStack => println!("{:?}", stack.stack),
 				_ => {}
@@ -369,9 +445,18 @@ fn run(mut program: Vec<Command>) {
 
 		idx += 1;
 	}
+	Ok(
+		Environment {
+			prefix,
+			stack,
+			definitions,
+			program,
+			idx
+		}
+	)
 }
 
-fn lexer(program: String) -> Vec<Command> {
+fn lexer(program: String) -> Environment {
 	let mut commands: Vec<Command> = Vec::new();
 	let mut idx = 0;
 	let prog: Vec<&str> = program.split_whitespace().collect();
@@ -393,6 +478,8 @@ fn lexer(program: String) -> Vec<Command> {
 					Command::Define(Visibility::Private),
 				"in" =>
 					Command::EndDefine,
+				"return" =>
+					Command::Return,
 				"jump" =>
 					Command::Jmp,
 				"jump?" =>
@@ -407,8 +494,14 @@ fn lexer(program: String) -> Vec<Command> {
 					Command::Drop,
 				"put" =>
 					Command::Put,
-				"push" =>
-					Command::Push,
+				"sub" =>
+					Command::SubProg,
+				"lambda" =>
+					Command::Lambda,
+				"run" =>
+					Command::Run,
+				"end" =>
+					Command::End,
 				"+" =>
 					Command::Add,
 				"-" =>
@@ -463,13 +556,48 @@ fn lexer(program: String) -> Vec<Command> {
 		idx += 1;
 	}
 
-	commands
+	Environment::new(commands)
+}
+
+fn repl() {
+	let mut prog = String::new();
+
+	loop {
+		let mut input = String::new();
+
+		print!(">> ");
+		io::stdout().flush().ok().expect("unable to flush to stdout");
+		match io::stdin().read_line(&mut input) {
+			Ok(n) => {
+				if n == 0 {
+					break;
+				}
+				match run(lexer(String::from(prog.as_ref()) + input.as_ref() + " STACK")) {
+					Ok(_) => {
+						prog += input.as_ref();
+					},
+					Err(e) => {
+						println!("error: {}", e);
+					}
+				}
+			}
+			Err(err) => {
+				println!("error: {}", err);
+				return;
+			}
+		}
+	}
 }
 
 fn main() {
 	let args: Vec<String> = env::args().collect();
 
 	let comment = Regex::new(r"/\*.*\*/").unwrap();
+
+	if args.len() == 1 {
+		repl();
+		return;
+	}
 
 	let mut file =
 		if args.len() > 1 {
@@ -487,5 +615,17 @@ fn main() {
 
 	let result = comment.replace_all(content.as_ref(), "");
 
-	run(lexer(result.to_string()));
+	match run(lexer(result.to_string())) {
+		Ok(_) => return,
+		Err(e) => println!("error: {}", e)
+	}
+}
+
+
+#[no_mangle]
+pub extern "C" fn run_string(input: &str) -> Vec<StackSlot> {
+	match run(lexer(input.to_string())) {
+		Ok(env) => env.stack.stack,
+		Err(_) => Vec::new()
+	}
 }

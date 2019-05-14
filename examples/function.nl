@@ -1,25 +1,20 @@
 "std.nl" include
 
 Greeter is
-	greet is name { _ }
-		@name put
-
-		"hello " print @name! @std::println!
-		@name!
+	greet is
+		dup
+		"hello " print
+		@std::println!
 	in
 
-	talk is name { _ }
-		@name put
-
+	talk is
 		"blabla, blabla" @std::println!
-		@name!
 	in
 
-	say_goodbye is name { _ }
-		@name put
-
-		"bye " print @name! @std::println!
-		 @name!
+	say_goodbye is
+		dup
+		"bye " print
+		@std::println!
 	in
 in
 
@@ -41,4 +36,3 @@ drop
 	@say_goodbye!
 drop
 
-@Greeter::greet::name @std::println!

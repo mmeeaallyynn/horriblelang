@@ -4,8 +4,11 @@ version = "0.1.0"
 authors = ["mdmn99 <merlin.mengel@mni.thm.de>"]
 edition = "2018"
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 regex = "1"
 
 [profile.release]
-opt-level="z"
+opt-level="s"

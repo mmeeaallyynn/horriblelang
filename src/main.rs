@@ -55,16 +55,17 @@ pub enum StackSlot {
 	Number(f64),
 	String(String),
 	Reference(String, usize),
-	Code(Vec<Command>)
+	Code(Vec<Command>),
+	Sub(Environment)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Stack {
 	stack: Vec<StackSlot>
 }
 
-#[derive(Clone)]
-struct Environment {
+#[derive(Clone, Debug)]
+pub struct Environment {
 	prefix: Vec<String>,
 	stack: Stack,
 	definitions: HashMap<String, usize>,
@@ -104,7 +105,7 @@ impl Stack {
 	}
 }
 
-fn run(env: Environment) -> Result<Environment, &'static str> {
+fn run(env: Environment) -> Result<Environment, String> {
 	let Environment {
 		mut prefix,
 		mut stack,
@@ -139,12 +140,12 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 				if let Visibility::Public = v {
 					if let Command::Pushs(string) = &program[idx - 1] { define_new(string.to_string()); execute = false; }
 					else {
-						return Err("public define needs a label");
+						return Err("public define needs a label".into());
 					}
 				} else if execute {
 					if let StackSlot::String(string) = stack.pop().unwrap() { define_new(string.to_string()); execute = false; }
 					else {
-						return Err("string required for private define");
+						return Err("string required for private define".into());
 					}
 				}
 			}
@@ -188,7 +189,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 							program.insert(idx + 1, token.clone());
 						}
 					} else {
-						return Err("expected file name for include");
+						return Err("expected file name for include".into());
 					}
 				}
 				Command::Pushn(n) => stack.push(StackSlot::Number(*n)),
@@ -206,11 +207,11 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 								idx = definitions[&n];
 							}
 						} else {
-							return Err("expected number for a conditional jump")
+							return Err("expected number for a conditional jump".into())
 
 						}
 					} else {
-						return Err("expected reference for a jump");
+						return Err("expected reference for a jump".into());
 
 					}
 				}
@@ -219,7 +220,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 						call_stack.push(idx);
 						idx = definitions[&n];
 					} else {
-						return Err("expected reference for a jump");
+						return Err("expected reference for a jump".into());
 					}
 				}
 				Command::Add => {
@@ -229,7 +230,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l + r));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::Sub => {
@@ -239,7 +240,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l - r));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::Mul => {
@@ -249,7 +250,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l * r));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::Div => {
@@ -259,7 +260,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l / r));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::LT => {
@@ -269,7 +270,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::LE => {
@@ -279,7 +280,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::GT => {
@@ -289,7 +290,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::GE => {
@@ -299,7 +300,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::EQ => {
@@ -316,7 +317,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 						(StackSlot::Number(_), StackSlot::String(_)) =>
 							stack.push(StackSlot::Number(0.0)),
 						_ => {
-							return Err("equal is only supported for Strings and Numbers");
+							return Err("equal is only supported for Strings and Numbers".into());
 						}
 					}
 				},
@@ -334,7 +335,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 						(StackSlot::Number(_), StackSlot::String(_)) =>
 							stack.push(StackSlot::Number(1.0)),
 						_ => {
-							return Err("not equal is only supported for Strings and Numbers");
+							return Err("not equal is only supported for Strings and Numbers".into());
 						}
 					}
 				},
@@ -368,9 +369,10 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 							StackSlot::Number(n) => print!("{}", n),
 							StackSlot::String(s) => print!("{}", s.replace("\\n", "\n")),
 							StackSlot::Reference(r, p) => print!("{} -> {}", r, p),
-							StackSlot::Code(_) => {}
+							StackSlot::Code(_) => {},
+							StackSlot::Sub(env) => print!("{:#?}", env)
 						},
-						None => println!("Stack underflow!")
+						None => return Err("stack underflow".into());
 					};
 				},
 				Command::Put => {
@@ -379,10 +381,11 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 							StackSlot::Number(n) => program[pos + 1] = Command::Pushn(n),
 							StackSlot::String(s) => program[pos + 1] = Command::Pushs(s),
 							StackSlot::Reference(r, _p) => program[pos + 1] = Command::Reference(String::from("@") + r.as_ref()),
-							StackSlot::Code(_) => {}
+							StackSlot::Code(_) => {},
+							StackSlot::Sub(_) => return Err("put not supported for sub".into())
 						};
 					} else {
-						return Err("reference required for put");
+						return Err("reference required for put".into());
 					}
 				},
 				Command::Reference(s) => {
@@ -390,7 +393,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if definitions.contains_key(name) {
 						stack.push(StackSlot::Reference(String::from(name), definitions[name]));
 					} else {
-						return Err("no such symbol");
+						return Err(format!("no such symbol: `{}`", name));
 					}
 				},
 				Command::AddressOf => {
@@ -399,11 +402,11 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 						if definitions.contains_key(s) {
 							stack.push(StackSlot::Reference(String::from(s), definitions[s]));
 						} else {
-							return Err("no such symbol");
+							return Err("no such symbol".into());
 
 						}
 					} else {
-						return Err("string required");
+						return Err("string required".into());
 					}
 				},
 				Command::SubProg => {
@@ -415,9 +418,10 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					match run(sub_env) {
 						Ok(result) => {
 							idx = result.idx;
-							if let Some(stack_slot) = result.stack.stack.last() {
-								stack.push(stack_slot.clone());
-							}
+							stack.push(StackSlot::Sub(result));
+//							if let Some(stack_slot) = result.stack.stack.last() {
+//								stack.push(stack_slot.clone());
+//							}
 						},
 						Err(err) =>
 							println!("error in sub: {}", err)
@@ -559,43 +563,12 @@ fn lexer(program: String) -> Environment {
 	Environment::new(commands)
 }
 
-fn repl() {
-	let mut prog = String::new();
-
-	loop {
-		let mut input = String::new();
-
-		print!(">> ");
-		io::stdout().flush().ok().expect("unable to flush to stdout");
-		match io::stdin().read_line(&mut input) {
-			Ok(n) => {
-				if n == 0 {
-					break;
-				}
-				match run(lexer(String::from(prog.as_ref()) + input.as_ref() + " STACK")) {
-					Ok(_) => {
-						prog += input.as_ref();
-					},
-					Err(e) => {
-						println!("error: {}", e);
-					}
-				}
-			}
-			Err(err) => {
-				println!("error: {}", err);
-				return;
-			}
-		}
-	}
-}
-
 fn main() {
 	let args: Vec<String> = env::args().collect();
 
 	let comment = Regex::new(r"/\*.*\*/").unwrap();
 
 	if args.len() == 1 {
-		repl();
 		return;
 	}
 
@@ -614,17 +587,19 @@ fn main() {
 		.expect("unable to read file");
 
 	let result = comment.replace_all(content.as_ref(), "");
+	let mut env = lexer(result.to_string());
 
-	match run(lexer(result.to_string())) {
+	match run(env) {
 		Ok(_) => return,
-		Err(e) => println!("error: {}", e)
+		Err(e) => println!("{}error: {}{}", "\x1b[01;91m", e, "\x1b[00m")
 	}
 }
 
 
 #[no_mangle]
 pub extern "C" fn run_string(input: &str) -> Vec<StackSlot> {
-	match run(lexer(input.to_string())) {
+	let mut env = lexer(input.to_string());
+	match run(env) {
 		Ok(env) => env.stack.stack,
 		Err(_) => Vec::new()
 	}

@@ -11,7 +11,7 @@ s {
 	in
 
 	pl is
-		print @s.rn!
+		print @s::rn!
 	in
 
 	-- is

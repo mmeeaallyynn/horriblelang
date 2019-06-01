@@ -1,0 +1,23 @@
+<html>
+<head>
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+</head>
+<body>
+<script type="text/javascript" src="pkg/notherlang.js"></script>
+<script type="module">
+const { produce, run_string } = wasm_bindgen;
+
+async function run() {
+	await wasm_bindgen("./pkg/notherlang_bg.wasm");
+
+	console.log(produce("Gunther"));
+	console.log(
+		run_string("1 1 +")
+	);
+
+}
+
+run();
+</script>
+</body>
+</html>

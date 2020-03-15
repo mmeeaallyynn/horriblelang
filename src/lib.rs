@@ -1,22 +1,28 @@
+mod arithparser;
+
 extern crate regex;
 
 use wasm_bindgen::prelude::*;
 
 use std::collections::HashMap;
 use std::env;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io;
 
 use regex::*;
 
 #[wasm_bindgen]
 extern {
 	pub fn alert(s: &str);
+	#[wasm_bindgen(js_namespace = console)]
+	pub fn log(s: &str);
+	#[wasm_bindgen(js_namespace = console)]
+	pub fn error(s: &str);
+    #[wasm_bindgen]
+    pub fn eval(s: &str) -> f64;
 }
 
 #[wasm_bindgen]
 pub fn produce(name: &str) -> String {
+	log("hello, world!");
 	format!("hello, {}", name)
 }
 
@@ -59,7 +65,8 @@ pub enum Command {
 	Return,
 
 	Include,
-	PrintStack
+	PrintStack,
+    JSEval
 }
 
 #[derive(Debug, Clone)]
@@ -116,7 +123,7 @@ impl Stack {
 	}
 }
 
-fn run(env: Environment) -> Result<Environment, &'static str> {
+fn run(env: Environment) -> Result<Environment, String> {
 	let Environment {
 		mut prefix,
 		mut stack,
@@ -149,14 +156,19 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 				};
 
 				if let Visibility::Public = v {
-					if let Command::Pushs(string) = &program[idx - 1] { define_new(string.to_string()); execute = false; }
+					if let Command::Pushs(string) = &program[idx - 1] {
+                        define_new(string.to_string()); execute = false;
+                    }
 					else {
-						return Err("public define needs a label");
+						return Err("public define needs a label".into());
 					}
 				} else if execute {
-					if let StackSlot::String(string) = stack.pop().unwrap() { define_new(string.to_string()); execute = false; }
+					if let StackSlot::String(string) = stack.pop().unwrap() {
+                        log(&format!("{}", string.clone()));
+                        define_new(string.to_string()); execute = false;
+                    }
 					else {
-						return Err("string required for private define");
+						return Err("string required for private define".into());
 					}
 				}
 			}
@@ -182,8 +194,9 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 		if execute {
 			match &program[idx] {
 				Command::Include => {
-					if let StackSlot::String(filename) = stack.pop().unwrap() {
-						let comment = Regex::new(r"/\*.*\*/").unwrap();
+//					if let StackSlot::String(filename) = stack.pop().unwrap() {
+						//let comment = Regex::new(r"/\*.*\*/").unwrap();
+/*
 						let mut file = File::open(&filename)
 							.expect("include: file not found");
 
@@ -202,6 +215,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					} else {
 						return Err("expected file name for include");
 					}
+					*/
 				}
 				Command::Pushn(n) => stack.push(StackSlot::Number(*n)),
 				Command::Pushs(s) => {
@@ -218,11 +232,11 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 								idx = definitions[&n];
 							}
 						} else {
-							return Err("expected number for a conditional jump")
+							return Err("expected number for a conditional jump".into())
 
 						}
 					} else {
-						return Err("expected reference for a jump");
+						return Err("expected reference for a jump".into());
 
 					}
 				}
@@ -231,7 +245,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 						call_stack.push(idx);
 						idx = definitions[&n];
 					} else {
-						return Err("expected reference for a jump");
+						return Err("expected reference for a jump".into());
 					}
 				}
 				Command::Add => {
@@ -241,7 +255,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l + r));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::Sub => {
@@ -251,7 +265,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l - r));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::Mul => {
@@ -261,7 +275,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l * r));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::Div => {
@@ -271,7 +285,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(l / r));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::LT => {
@@ -281,7 +295,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::LE => {
@@ -291,7 +305,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::GT => {
@@ -301,7 +315,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::GE => {
@@ -311,7 +325,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
 						stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
 					} else {
-						return Err("arithmetic is only supported for numbers");
+						return Err("arithmetic is only supported for numbers".into());
 					}
 				},
 				Command::EQ => {
@@ -328,7 +342,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 						(StackSlot::Number(_), StackSlot::String(_)) =>
 							stack.push(StackSlot::Number(0.0)),
 						_ => {
-							return Err("equal is only supported for Strings and Numbers");
+							return Err("equal is only supported for Strings and Numbers".into());
 						}
 					}
 				},
@@ -346,7 +360,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 						(StackSlot::Number(_), StackSlot::String(_)) =>
 							stack.push(StackSlot::Number(1.0)),
 						_ => {
-							return Err("not equal is only supported for Strings and Numbers");
+							return Err("not equal is only supported for Strings and Numbers".into());
 						}
 					}
 				},
@@ -377,9 +391,9 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 				Command::Print => {
 					match stack.pop() {
 						Some(slot) => match slot {
-							StackSlot::Number(n) => print!("{}", n),
-							StackSlot::String(s) => print!("{}", s.replace("\\n", "\n")),
-							StackSlot::Reference(r, p) => print!("{} -> {}", r, p),
+							StackSlot::Number(n) => log(&format!("{}", n)),
+							StackSlot::String(s) => log(&format!("{}", s.replace("\\n", "\n"))),
+							StackSlot::Reference(r, p) => log(&format!("{} -> {}", r, p)),
 							StackSlot::Code(_) => {}
 						},
 						None => println!("Stack underflow!")
@@ -394,7 +408,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 							StackSlot::Code(_) => {}
 						};
 					} else {
-						return Err("reference required for put");
+						return Err("reference required for put".into());
 					}
 				},
 				Command::Reference(s) => {
@@ -402,7 +416,7 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					if definitions.contains_key(name) {
 						stack.push(StackSlot::Reference(String::from(name), definitions[name]));
 					} else {
-						return Err("no such symbol");
+						return Err(format!("no such symbol: `{}`", name));
 					}
 				},
 				Command::AddressOf => {
@@ -411,11 +425,11 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 						if definitions.contains_key(s) {
 							stack.push(StackSlot::Reference(String::from(s), definitions[s]));
 						} else {
-							return Err("no such symbol");
+							return Err(format!("no such symbol: `{}`", s));
 
 						}
 					} else {
-						return Err("string required");
+						return Err("string required".into());
 					}
 				},
 				Command::SubProg => {
@@ -436,6 +450,16 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					}
 				},
 				Command::Run => {
+					if let StackSlot::Code(prog) = stack.pop().unwrap() {
+						match run(Environment::new(prog)) {
+							Ok(new_env) => for item in new_env.stack.stack {
+								stack.push(item);
+							},
+							Err(e) => return Err(format!("lambda error: {}", e))
+						}
+					} else {
+						return Err("run requires lambda on stack".into());
+					}
 				}
 				Command::Lambda => {
 					let mut lambda_prog: Vec<Command> = Vec::new();
@@ -451,6 +475,12 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 					break;
 				}
 				Command::PrintStack => println!("{:?}", stack.stack),
+                Command::JSEval => if let StackSlot::String(s) = stack.pop().unwrap() {
+    				stack.push(StackSlot::Number(eval(s.as_ref())));
+                }
+                else {
+                    return Err("javascript needs to be a string".into());
+                },
 				_ => {}
 			}
 		}
@@ -471,7 +501,14 @@ fn run(env: Environment) -> Result<Environment, &'static str> {
 fn lexer(program: String) -> Environment {
 	let mut commands: Vec<Command> = Vec::new();
 	let mut idx = 0;
-	let prog: Vec<&str> = program.split_whitespace().collect();
+
+    let mut preprocessed = program;
+    preprocessed = preprocessed.replace("(", " ( ");
+    preprocessed = preprocessed.replace(")", " ) ");
+
+	let prog: Vec<&str> = preprocessed
+        .split_whitespace()
+        .collect();
 
 	while idx < prog.len() {
 		let next: Command =
@@ -480,11 +517,15 @@ fn lexer(program: String) -> Environment {
 					Command::Include,
 				"STACK" =>
 					Command::PrintStack,
+                "__jseval" =>
+                    Command::JSEval,
 				"{" =>
 					Command::Define(Visibility::Public),
 				"}" =>
 					Command::EndDefine,
 				"is" =>
+					Command::Define(Visibility::Public),
+				"=" =>
 					Command::Define(Visibility::Public),
 				"priv" =>
 					Command::Define(Visibility::Private),
@@ -538,16 +579,20 @@ fn lexer(program: String) -> Environment {
 					Command::AddressOf,
 				"print" =>
 					Command::Print,
-				s if String::from(s).starts_with(r#"""#) => {
+				s if String::from(s).starts_with("\"") => {
+                    log(&format!("{:?}", prog));
 					let mut string = String::from(s);
 
-					while !prog[idx].ends_with(r#"""#) {
+					while !prog[idx].ends_with("\"") || prog[idx].ends_with("\\\"") {
+                        log(&format!("{}", prog[idx]));
 						idx += 1;
 						string.push(' ');
 						string.push_str(prog[idx].as_ref());
 					}
 
-					Command::Pushs(String::from(string).replace(r#"""#, ""))
+					Command::Pushs(String::from(&string)
+                        .get(1..string.len() - 1).unwrap()
+                        .replace("\\\"", "\""))
 				},
 				s if String::from(s).starts_with("@") => {
 					if String::from(s).ends_with("!") {
@@ -561,6 +606,13 @@ fn lexer(program: String) -> Environment {
 				},
 				s if s.parse::<f64>().is_ok() =>
 					Command::Pushn(s.parse::<f64>().unwrap()),
+				s if String::from(s).starts_with("(") => {
+					let stuff = arithparser::parse(&prog, &mut idx, 0);
+                    for com in stuff[..stuff.len() - 1].iter() {
+                        commands.push(com.clone());
+                    }
+                    stuff[stuff.len() - 1].clone()
+				}
 				s =>
 					Command::Pushs(String::from(s))
 			};
@@ -572,13 +624,16 @@ fn lexer(program: String) -> Environment {
 }
 
 fn main() {
-	println!("nothing here!");
+	println!("nothing here!")
 }
 
 #[wasm_bindgen]
 pub fn run_string(input: &str) -> String {
 	format!("{:?}", match run(lexer(input.to_string())) {
 		Ok(env) => env.stack.stack,
-		Err(_) => Vec::new()
+		Err(msg) => {
+			error(&format!("Notherlang Error: {}", msg));
+			Vec::new()
+		}
 	})
 }

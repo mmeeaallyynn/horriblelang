@@ -4,6 +4,60 @@
 </head>
 <body>
 
+<textarea rows="40" cols="80" id="text" style="background: #FFF; color: #000; font-size: 1.5em">
+std {
+  if is
+    @then jump?
+  in
+  endl is
+    "\n" print
+  in
+  println is
+    print @std::endl!
+  in
+  dec is
+    ref is 0 in @ref put
+    @ref! jump 1 - @ref! put
+  in
+  inc is
+    ref is 0 in @ref put
+    @ref! jump 1 + @ref! put
+  in
+}
+
+fibonacci is
+  counter is 0 in
+  @counter put
+
+  a is 0 in
+  b is 1 in
+  result is 0 in
+
+  loop {
+    @a! @b! + @result put
+
+    @b! @a put
+    @result! @b put
+
+    @counter @std::dec!
+
+    @counter! 0 > then {
+      @loop!
+    } @std::if!
+  } @loop!
+
+  @result!
+in
+
+prompt() __jseval @fibonacci!
+
+
+</textarea>
+<br>
+<button id="ok">OK</button>
+
+<div id="result"></div>
+
 <script type="text/notherlang">
 std {
 	/* Consumes the value and jumps to a user defined "then" */
@@ -54,12 +108,12 @@ fibonacci is
 
 	@result!
 in
-
-60 @fibonacci!
+""
 
 </script>
-<script type="text/javascript" src="pkg/notherlang.js"></script>
 
+
+<script type="text/javascript" src="pkg/notherlang.js"></script>
 <script type="module">
 const { produce, run_string } = wasm_bindgen;
 async function run() {
@@ -73,9 +127,14 @@ async function run() {
 
 	await wasm_bindgen("./pkg/notherlang_bg.wasm");
 
-	console.log(
-		run_string(prog)
-	);
+	produce("meow");
+
+    document.getElementById("result").innerHTML = run_string(prog);
+	document.getElementById("ok").onclick = () => {
+	    document.getElementById("result").innerHTML = run_string(
+	    	document.getElementById("text").value
+	    );
+	}
 }
 run();
 </script>

@@ -1,7 +1,7 @@
 use crate::*;
 
 
-pub fn parse(prog: &Vec<&str>, mut i: &mut usize, depth: usize) -> Vec<Command> {
+pub fn parse(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> {
     let parsed = parse_expression(prog, &mut i);
 
     *i -= 1;
@@ -26,7 +26,6 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
         error(&format!("expected opening parenthesis, found {}", prog[*i]));
         panic!();
     }
-
     *i += 1;
 
     parsed.append(&mut parse_expression(prog, &mut i));
@@ -46,7 +45,6 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
             panic!();
         }
     };
-
     *i += 1;
 
     parsed.append(&mut parse_expression(prog, &mut i));
@@ -61,7 +59,7 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
     parsed
 }
 
-fn parse_value(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> {
+fn parse_value(prog: &Vec<&str>, i: &mut usize) -> Vec<Command> {
     let mut parsed: Vec<Command> = vec![];
 
     match prog[*i] {

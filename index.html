@@ -27,21 +27,22 @@ std {
 
 fibonacci is
   counter is 0 in
-  @counter put
+
+  -> @counter
 
   a is 0 in
   b is 1 in
   result is 0 in
 
   loop {
-    @a! @b! + @result put
+    (a + b) -> @result
 
-    @b! @a put
-    @result! @b put
+    @b! -> @a
+    @result! -> @b
 
     @counter @std::dec!
 
-    @counter! 0 > then {
+    (counter > 0) then {
       @loop!
     } @std::if!
   } @loop!
@@ -49,7 +50,7 @@ fibonacci is
   @result!
 in
 
-prompt() __jseval @fibonacci!
+11 @fibonacci!
 
 
 </textarea>
@@ -60,12 +61,10 @@ prompt() __jseval @fibonacci!
 
 <script type="text/notherlang">
 std {
-	/* Consumes the value and jumps to a user defined "then" */
 	if is
 		@then jump?
 	in
 
-	/* Prints a newline */
 	endl is
 		"\n" print
 	in

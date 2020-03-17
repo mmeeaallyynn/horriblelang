@@ -29,6 +29,23 @@ std {
   prompt is 
     "prompt(\"" swap "\")" + + __jseval
   in
+  fold is 
+    guard is "|" in
+    func is @std::println in
+    accu is "" in
+
+    -> @func
+
+    loop_start {
+      dup @guard! != then {
+        @accu! @func! jump -> @accu
+        @loop_start!
+      } @std::if!
+    } @loop_start!
+
+    drop
+    @accu!
+  in
 }
 
 fibonacci is

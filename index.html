@@ -31,8 +31,8 @@ std {
   in
   fold is 
     guard is "|" in
-    func is @std::println in
-    accu is "" in
+    func is _ in
+    accu is _ in
 
     -> @func
 
@@ -49,7 +49,7 @@ std {
 }
 
 fibonacci is
-  counter is 0 in
+  counter is _ in
 
   a is 0 in
   b is 1 in
@@ -73,10 +73,11 @@ in
 
 
 "a number:" @std::prompt! -> @fibonacci::counter
+"result: " @fibonacci! + @std::alert!
 
-
-"the answer is " @fibonacci! + @std::alert!
-
+add is + in
+0 -> @std::fold::accu
+| 0 1 2 3 4 @add @std::fold!
 
 </textarea>
 <br>

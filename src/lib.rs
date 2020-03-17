@@ -65,7 +65,8 @@ pub enum Command {
 
     Include,
     PrintStack,
-    JSEval
+    JSEval,
+    Placeholder
 }
 
 #[derive(Debug, Clone)]
@@ -142,7 +143,7 @@ fn run(env: Environment) -> Result<Environment, String> {
     let mut execute = true;
     let mut level = 0;
 
-    let mut call_stack: Vec<usize> = Vec::new();
+    let mut call_stack: Vec<(usize, String)> = Vec::new();
 
     while idx < program.len() {
         match &program[idx] {
@@ -229,13 +230,13 @@ fn run(env: Environment) -> Result<Environment, String> {
                     stack.push(StackSlot::String(s.clone()))
                 },
                 Command::EndDefine | Command::Return => if call_stack.len() > 0 {
-                    idx = call_stack.pop().unwrap() as usize;
+                    idx = call_stack.pop().unwrap().0 as usize;
                 },
                 Command::JmpIf => {
                     if let StackSlot::Reference(n, _) = stack.pop().unwrap() {
                         if let StackSlot::Number(f) = stack.pop().unwrap() {
                             if f != 0.0 {
-                                call_stack.push(idx);
+                                call_stack.push((idx, n.clone()));
                                 idx = definitions[&n];
                             }
                         } else {
@@ -249,7 +250,7 @@ fn run(env: Environment) -> Result<Environment, String> {
                 }
                 Command::Jmp => {
                     if let StackSlot::Reference(n, _) = stack.pop().unwrap() {
-                        call_stack.push(idx);
+                        call_stack.push((idx, n.clone()));
                         idx = definitions[&n];
                     } else {
                         return Err("expected reference for a jump".into());
@@ -517,10 +518,14 @@ fn run(env: Environment) -> Result<Environment, String> {
                 }
                 Command::PrintStack => println!("{:?}", stack.stack),
                 Command::JSEval => if let StackSlot::String(s) = stack.pop().unwrap() {
-                    stack.push(StackSlot::Number(eval(s.as_ref())));
-                }
-                else {
-                    return Err("javascript needs to be a string".into());
+                        stack.push(StackSlot::Number(eval(s.as_ref())));
+                    }
+                    else {
+                        return Err("javascript needs to be a string".into());
+                    },
+                Command::Placeholder => {
+                    let call_info = call_stack.iter().map(|f| f.1.clone()).collect::<Vec<String>>();
+                    return Err(format!("encountered placeholder in {:#?}", call_info));
                 },
                 _ => {}
             }
@@ -622,6 +627,8 @@ fn lexer(program: String) -> Environment {
                     Command::AddressOf,
                 "print" =>
                     Command::Print,
+                "_" => 
+                    Command::Placeholder,
                 s if String::from(s).starts_with("\"") => {
                     let mut string = String::from(s);
 

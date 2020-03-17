@@ -1,3 +1,5 @@
+#![feature(or_patterns)]
+
 mod arithparser;
 
 extern crate regex;
@@ -257,10 +259,22 @@ fn run(env: Environment) -> Result<Environment, String> {
                     let right = stack.pop().unwrap();
                     let left = stack.pop().unwrap();
 
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (&right, &left) {
                         stack.push(StackSlot::Number(l + r));
+                    } else if let (StackSlot::String(r), StackSlot::Number(l)) = (&right, &left) {
+                        stack.push(StackSlot::String(
+                            format!("{}{}", l, r)
+                        ));
+                    } else if let (StackSlot::Number(r), StackSlot::String(l)) = (&right, &left) {
+                        stack.push(StackSlot::String(
+                            format!("{}{}", l, r)
+                        ));
+                    } else if let (StackSlot::String(r), StackSlot::String(l)) = (&right, &left) {
+                        stack.push(StackSlot::String(
+                            format!("{}{}", l, r)
+                        ));
                     } else {
-                        return Err("arithmetic is only supported for numbers".into());
+                        return Err("add operator only supported for numbers or strings".into());
                     }
                 },
                 Command::Sub => {
@@ -612,7 +626,6 @@ fn lexer(program: String) -> Environment {
                     let mut string = String::from(s);
 
                     while !prog[idx].ends_with("\"") || prog[idx].ends_with("\\\"") {
-                        log(&format!("{}", prog[idx]));
                         idx += 1;
                         string.push(' ');
                         string.push_str(prog[idx].as_ref());

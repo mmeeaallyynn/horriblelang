@@ -23,12 +23,16 @@ std {
     ref is 0 in @ref put
     @ref! jump 1 + @ref! put
   in
+  alert is
+    "alert(\"" swap "\")" + + __jseval drop
+  in
+  prompt is 
+    "prompt(\"" swap "\")" + + __jseval
+  in
 }
 
 fibonacci is
   counter is 0 in
-
-  -> @counter
 
   a is 0 in
   b is 1 in
@@ -50,7 +54,11 @@ fibonacci is
   @result!
 in
 
-11 @fibonacci!
+
+"a number:" @std::prompt! -> @fibonacci::counter
+
+
+"the answer is " @fibonacci! + @std::alert!
 
 
 </textarea>

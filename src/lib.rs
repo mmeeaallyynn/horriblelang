@@ -6,6 +6,13 @@ extern crate regex;
 
 use wasm_bindgen::prelude::*;
 use std::collections::HashMap;
+use std::sync::Mutex;
+
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref ENV: Mutex<Environment> = Mutex::new(Environment::new(vec![]));
+}
 
 #[wasm_bindgen]
 extern {
@@ -77,12 +84,12 @@ pub enum StackSlot {
     Code(Vec<Command>)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Stack {
     stack: Vec<StackSlot>
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Environment {
     prefix: Vec<String>,
     stack: Stack,
@@ -119,6 +126,19 @@ impl Environment {
             Err(format!("no such symbol: `{}`", name))
         }
     }
+
+    fn define_new(&mut self, s: String) {
+        self.prefix.push(s.clone());
+        let name = self.prefix.join("::");
+
+        if self.definitions.contains_key(&name) {
+            *self.definitions.get_mut(&name).unwrap() = self.idx;
+        } else {
+            self.definitions.insert(
+                name, self.idx
+            );
+        }
+    }
 }
 
 impl Stack {
@@ -131,49 +151,30 @@ impl Stack {
     }
 }
 
-fn run(env: Environment) -> Result<Environment, String> {
-    let Environment {
-        mut prefix,
-        mut stack,
-        mut definitions,
-        mut program,
-        mut idx
-    } = env;
-
+fn run(mut env: &mut Environment) -> Result<Environment, String> {
     let mut execute = true;
     let mut level = 0;
 
     let mut call_stack: Vec<(usize, String)> = Vec::new();
 
-    while idx < program.len() {
-        match &program[idx] {
+    while env.idx < env.program.len() { 
+        match &env.program[env.idx] {
             Command::Define(v) => {
-                let mut define_new = |s: String| {
-                    prefix.push(s.clone());
-                    let name = prefix.join("::");
-
-                    level += 1;
-
-                    if definitions.contains_key(&name) {
-                        *definitions.get_mut(&name).unwrap() = idx;
-                    } else {
-                        definitions.insert(
-                            name, idx
-                        );
-                    }
-                };
-
                 if let Visibility::Public = v {
-                    if let Command::Pushs(string) = &program[idx - 1] {
-                        define_new(string.to_string()); execute = false;
+                    if let Command::Pushs(string) = env.program[env.idx - 1].clone() {
+                        env.define_new(string.to_string());
+                        execute = false;
+                        level += 1;
                     }
                     else {
                         return Err("public define needs a label".into());
                     }
                 } else if execute {
-                    if let StackSlot::String(string) = stack.pop().unwrap() {
+                    if let StackSlot::String(string) = env.stack.pop().unwrap() {
                         log(&format!("{}", string.clone()));
-                        define_new(string.to_string()); execute = false;
+                        env.define_new(string.to_string());
+                        execute = false;
+                        level += 1;
                     }
                     else {
                         return Err("string required for private define".into());
@@ -184,15 +185,15 @@ fn run(env: Environment) -> Result<Environment, String> {
         }
 
         if !execute {
-            match &program[idx] {
+            match &env.program[env.idx] {
                 Command::EndDefine => {
-                    prefix.pop();
+                    env.prefix.pop();
                     level -= 1;
                     if level < 1 {
-                        stack.pop();
+                        env.stack.pop();
 
                         execute = true;
-                        idx += 1;
+                        env.idx += 1;
                     }
                 },
                 _ => {}
@@ -200,9 +201,9 @@ fn run(env: Environment) -> Result<Environment, String> {
         }
 
         if execute {
-            match &program[idx] {
+            match &env.program[env.idx] {
                 Command::Include => {
-//                    if let StackSlot::String(filename) = stack.pop().unwrap() {
+//                    if let StackSlot::String(filename) = env.stack.pop().unwrap() {
                         //let comment = Regex::new(r"/\*.*\*/").unwrap();
 /*
                         let mut file = File::open(&filename)
@@ -214,30 +215,30 @@ fn run(env: Environment) -> Result<Environment, String> {
                             .expect("unable to read file");
 
                         let result = comment.replace_all(content.as_ref(), "");
-                        let mut tokens = lexer(result.to_string()).program;
+                        let mut tokens = lexer(result.to_string()).env.program;
                         tokens.reverse();
 
                         for token in tokens.iter() {
-                            program.insert(idx + 1, token.clone());
+                            env.program.insert(env.idx + 1, token.clone());
                         }
                     } else {
                         return Err("expected file name for include");
                     }
                     */
                 }
-                Command::Pushn(n) => stack.push(StackSlot::Number(*n)),
+                Command::Pushn(n) => env.stack.push(StackSlot::Number(*n)),
                 Command::Pushs(s) => {
-                    stack.push(StackSlot::String(s.clone()))
+                    env.stack.push(StackSlot::String(s.clone()))
                 },
                 Command::EndDefine | Command::Return => if call_stack.len() > 0 {
-                    idx = call_stack.pop().unwrap().0 as usize;
+                    env.idx = call_stack.pop().unwrap().0 as usize;
                 },
                 Command::JmpIf => {
-                    if let StackSlot::Reference(n, _) = stack.pop().unwrap() {
-                        if let StackSlot::Number(f) = stack.pop().unwrap() {
+                    if let StackSlot::Reference(n, _) = env.stack.pop().unwrap() {
+                        if let StackSlot::Number(f) = env.stack.pop().unwrap() {
                             if f != 0.0 {
-                                call_stack.push((idx, n.clone()));
-                                idx = definitions[&n];
+                                call_stack.push((env.idx, n.clone()));
+                                env.idx = env.definitions[&n];
                             }
                         } else {
                             return Err("expected number for a conditional jump".into())
@@ -249,29 +250,29 @@ fn run(env: Environment) -> Result<Environment, String> {
                     }
                 }
                 Command::Jmp => {
-                    if let StackSlot::Reference(n, _) = stack.pop().unwrap() {
-                        call_stack.push((idx, n.clone()));
-                        idx = definitions[&n];
+                    if let StackSlot::Reference(n, _) = env.stack.pop().unwrap() {
+                        call_stack.push((env.idx, n.clone()));
+                        env.idx = env.definitions[&n];
                     } else {
                         return Err("expected reference for a jump".into());
                     }
                 }
                 Command::Add => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     if let (StackSlot::Number(r), StackSlot::Number(l)) = (&right, &left) {
-                        stack.push(StackSlot::Number(l + r));
+                        env.stack.push(StackSlot::Number(l + r));
                     } else if let (StackSlot::String(r), StackSlot::Number(l)) = (&right, &left) {
-                        stack.push(StackSlot::String(
+                        env.stack.push(StackSlot::String(
                             format!("{}{}", l, r)
                         ));
                     } else if let (StackSlot::Number(r), StackSlot::String(l)) = (&right, &left) {
-                        stack.push(StackSlot::String(
+                        env.stack.push(StackSlot::String(
                             format!("{}{}", l, r)
                         ));
                     } else if let (StackSlot::String(r), StackSlot::String(l)) = (&right, &left) {
-                        stack.push(StackSlot::String(
+                        env.stack.push(StackSlot::String(
                             format!("{}{}", l, r)
                         ));
                     } else {
@@ -279,114 +280,114 @@ fn run(env: Environment) -> Result<Environment, String> {
                     }
                 },
                 Command::Sub => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        stack.push(StackSlot::Number(l - r));
+                        env.stack.push(StackSlot::Number(l - r));
                     } else {
                         return Err("arithmetic is only supported for numbers".into());
                     }
                 },
                 Command::Mul => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        stack.push(StackSlot::Number(l * r));
+                        env.stack.push(StackSlot::Number(l * r));
                     } else {
                         return Err("arithmetic is only supported for numbers".into());
                     }
                 },
                 Command::Div => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        stack.push(StackSlot::Number(l / r));
+                        env.stack.push(StackSlot::Number(l / r));
                     } else {
                         return Err("arithmetic is only supported for numbers".into());
                     }
                 },
                 Command::LT => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
+                        env.stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
                     } else {
                         return Err("arithmetic is only supported for numbers".into());
                     }
                 },
                 Command::LE => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
+                        env.stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
                     } else {
                         return Err("arithmetic is only supported for numbers".into());
                     }
                 },
                 Command::GT => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
+                        env.stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
                     } else {
                         return Err("arithmetic is only supported for numbers".into());
                     }
                 },
                 Command::GE => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
+                        env.stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
                     } else {
                         return Err("arithmetic is only supported for numbers".into());
                     }
                 },
                 Command::EQ => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     match (left, right) {
                         (StackSlot::Number(r), StackSlot::Number(l)) =>
-                            stack.push(StackSlot::Number(if l == r { 1.0 } else { 0.0 })),
+                            env.stack.push(StackSlot::Number(if l == r { 1.0 } else { 0.0 })),
                         (StackSlot::String(r), StackSlot::String(l)) =>
-                            stack.push(StackSlot::Number(if l == r { 1.0 } else { 0.0 })),
+                            env.stack.push(StackSlot::Number(if l == r { 1.0 } else { 0.0 })),
                         (StackSlot::String(_), StackSlot::Number(_)) =>
-                            stack.push(StackSlot::Number(0.0)),
+                            env.stack.push(StackSlot::Number(0.0)),
                         (StackSlot::Number(_), StackSlot::String(_)) =>
-                            stack.push(StackSlot::Number(0.0)),
+                            env.stack.push(StackSlot::Number(0.0)),
                         _ => {
                             return Err("equal is only supported for Strings and Numbers".into());
                         }
                     }
                 },
                 Command::NE => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right = env.stack.pop().unwrap();
+                    let left = env.stack.pop().unwrap();
 
                     match (left, right) {
                         (StackSlot::Number(r), StackSlot::Number(l)) =>
-                            stack.push(StackSlot::Number(if l != r { 1.0 } else { 0.0 })),
+                            env.stack.push(StackSlot::Number(if l != r { 1.0 } else { 0.0 })),
                         (StackSlot::String(r), StackSlot::String(l)) =>
-                            stack.push(StackSlot::Number(if l != r { 1.0 } else { 0.0 })),
+                            env.stack.push(StackSlot::Number(if l != r { 1.0 } else { 0.0 })),
                         (StackSlot::String(_), StackSlot::Number(_)) =>
-                            stack.push(StackSlot::Number(1.0)),
+                            env.stack.push(StackSlot::Number(1.0)),
                         (StackSlot::Number(_), StackSlot::String(_)) =>
-                            stack.push(StackSlot::Number(1.0)),
+                            env.stack.push(StackSlot::Number(1.0)),
                         _ => {
                             return Err("not equal is only supported for Strings and Numbers".into());
                         }
                     }
                 },
                 Command::Not => {
-                    if let StackSlot::Number(n) = stack.pop().unwrap() {
-                        stack.push(StackSlot::Number(
+                    if let StackSlot::Number(n) = env.stack.pop().unwrap() {
+                        env.stack.push(StackSlot::Number(
                             if n == 0.0 {
                                 1.0
                             } else {
@@ -396,20 +397,20 @@ fn run(env: Environment) -> Result<Environment, String> {
                     }
                 },
                 Command::Dup => {
-                    stack.push(stack.stack[stack.stack.len() - 1].clone());
+                    env.stack.push(env.stack.stack[env.stack.stack.len() - 1].clone());
                 },
                 Command::Swap => {
-                    let top = stack.pop().unwrap();
-                    let bot = stack.pop().unwrap();
+                    let top = env.stack.pop().unwrap();
+                    let bot = env.stack.pop().unwrap();
 
-                    stack.push(top);
-                    stack.push(bot);
+                    env.stack.push(top);
+                    env.stack.push(bot);
                 },
                 Command::Drop => {
-                    stack.pop();
+                    env.stack.pop();
                 },
                 Command::Print => {
-                    match stack.pop() {
+                    match env.stack.pop() {
                         Some(slot) => match slot {
                             StackSlot::Number(n) => log(&format!("{}", n)),
                             StackSlot::String(s) => log(&format!("{}", s.replace("\\n", "\n"))),
@@ -421,7 +422,7 @@ fn run(env: Environment) -> Result<Environment, String> {
                 },
                 Command::ArrowPut => {
                     let value: Command;
-                    match stack.pop().unwrap() {
+                    match env.stack.pop().unwrap() {
                         StackSlot::Number(n) => value = Command::Pushn(n),
                         StackSlot::String(s) => value = Command::Pushs(s),
                         StackSlot::Reference(r, _p) => value = Command::Reference(String::from("@") + r.as_ref()),
@@ -429,10 +430,10 @@ fn run(env: Environment) -> Result<Environment, String> {
                         _ => return Err("expected value for arrow expression".into())
                     };
 
-                    if let Command::Reference(name) = &program[idx + 1] {
-                        if let Ok(pos) = Environment::resolve_reference(&definitions, name.split("@").collect::<Vec<&str>>()[1].into()) {
-                            program[pos + 1] = value.clone();
-                            idx += 1;
+                    if let Command::Reference(name) = &env.program[env.idx + 1] {
+                        if let Ok(pos) = Environment::resolve_reference(&env.definitions, name.split("@").collect::<Vec<&str>>()[1].into()) {
+                            env.program[pos + 1] = value.clone();
+                            env.idx += 1;
                         }
                         else {
                             return Err(format!("no such symbol: `{}`", name));
@@ -442,11 +443,11 @@ fn run(env: Environment) -> Result<Environment, String> {
                     }
                 },
                 Command::Put => {
-                    if let StackSlot::Reference(_, pos) = stack.pop().unwrap() {
-                        match stack.pop().unwrap() {
-                            StackSlot::Number(n) => program[pos + 1] = Command::Pushn(n),
-                            StackSlot::String(s) => program[pos + 1] = Command::Pushs(s),
-                            StackSlot::Reference(r, _p) => program[pos + 1] = Command::Reference(String::from("@") + r.as_ref()),
+                    if let StackSlot::Reference(_, pos) = env.stack.pop().unwrap() {
+                        match env.stack.pop().unwrap() {
+                            StackSlot::Number(n) => env.program[pos + 1] = Command::Pushn(n),
+                            StackSlot::String(s) => env.program[pos + 1] = Command::Pushs(s),
+                            StackSlot::Reference(r, _p) => env.program[pos + 1] = Command::Reference(String::from("@") + r.as_ref()),
                             StackSlot::Code(_) => {}
                         };
                     } else {
@@ -455,17 +456,17 @@ fn run(env: Environment) -> Result<Environment, String> {
                 },
                 Command::Reference(s) => {
                     let name: &str = s.split("@").collect::<Vec<&str>>()[1];
-                    if definitions.contains_key(name) {
-                        stack.push(StackSlot::Reference(String::from(name), definitions[name]));
+                    if env.definitions.contains_key(name) {
+                        env.stack.push(StackSlot::Reference(String::from(name), env.definitions[name]));
                     } else {
                         return Err(format!("no such symbol: `{}`", name));
                     }
                 },
                 Command::AddressOf => {
-                    if let StackSlot::String(name) = stack.pop().unwrap() {
+                    if let StackSlot::String(name) = env.stack.pop().unwrap() {
                         let s: &str = name.as_ref();
-                        if definitions.contains_key(s) {
-                            stack.push(StackSlot::Reference(String::from(s), definitions[s]));
+                        if env.definitions.contains_key(s) {
+                            env.stack.push(StackSlot::Reference(String::from(s), env.definitions[s]));
                         } else {
                             return Err(format!("no such symbol: `{}`", s));
 
@@ -475,16 +476,16 @@ fn run(env: Environment) -> Result<Environment, String> {
                     }
                 },
                 Command::SubProg => {
-                    let mut sub_env = Environment::new(program.clone());
-                    sub_env.idx = idx + 1;
-                    sub_env.prefix = prefix.clone();
-                    sub_env.definitions = definitions.clone();
+                    let mut sub_env = Environment::new(env.program.clone());
+                    sub_env.idx = env.idx + 1;
+                    sub_env.prefix = env.prefix.clone();
+                    sub_env.definitions = env.definitions.clone();
 
-                    match run(sub_env) {
+                    match run(&mut sub_env) {
                         Ok(result) => {
-                            idx = result.idx;
+                            env.idx = result.idx;
                             if let Some(stack_slot) = result.stack.stack.last() {
-                                stack.push(stack_slot.clone());
+                                env.stack.push(stack_slot.clone());
                             }
                         },
                         Err(err) =>
@@ -492,10 +493,10 @@ fn run(env: Environment) -> Result<Environment, String> {
                     }
                 },
                 Command::Run => {
-                    if let StackSlot::Code(prog) = stack.pop().unwrap() {
-                        match run(Environment::new(prog)) {
+                    if let StackSlot::Code(prog) = env.stack.pop().unwrap() {
+                        match run(&mut Environment::new(prog)) {
                             Ok(new_env) => for item in new_env.stack.stack {
-                                stack.push(item);
+                                env.stack.push(item);
                             },
                             Err(e) => return Err(format!("lambda error: {}", e))
                         }
@@ -505,20 +506,20 @@ fn run(env: Environment) -> Result<Environment, String> {
                 }
                 Command::Lambda => {
                     let mut lambda_prog: Vec<Command> = Vec::new();
-                    idx += 1;
-                    while program[idx] != Command::End {
-                        lambda_prog.push(program[idx].clone());
-                        idx += 1;
+                    env.idx += 1;
+                    while env.program[env.idx] != Command::End {
+                        lambda_prog.push(env.program[env.idx].clone());
+                        env.idx += 1;
                     }
 
-                    stack.push(StackSlot::Code(lambda_prog));
+                    env.stack.push(StackSlot::Code(lambda_prog));
                 }
                 Command::End => {
                     break;
                 }
-                Command::PrintStack => println!("{:?}", stack.stack),
-                Command::JSEval => if let StackSlot::String(s) = stack.pop().unwrap() {
-                        stack.push(StackSlot::Number(eval(s.as_ref())));
+                Command::PrintStack => println!("{:?}", env.stack.stack),
+                Command::JSEval => if let StackSlot::String(s) = env.stack.pop().unwrap() {
+                        env.stack.push(StackSlot::Number(eval(s.as_ref())));
                     }
                     else {
                         return Err("javascript needs to be a string".into());
@@ -531,16 +532,10 @@ fn run(env: Environment) -> Result<Environment, String> {
             }
         }
 
-        idx += 1;
+        env.idx += 1;
     }
     Ok(
-        Environment {
-            prefix,
-            stack,
-            definitions,
-            program,
-            idx
-        }
+        Environment::from(env.clone())
     )
 }
 
@@ -677,11 +672,14 @@ fn main() {
 
 #[wasm_bindgen]
 pub fn run_string(input: &str) -> String {
-    format!("{:?}", match run(lexer(input.to_string())) {
-        Ok(env) => env.stack.stack,
-        Err(msg) => {
-            error(&format!("Notherlang Error: {}", msg));
-            Vec::new()
+    format!("{:?}", {
+        ENV.lock().unwrap().program.append(&mut lexer(input.to_string()).program);
+        match run(&mut ENV.lock().unwrap()) {
+            Ok(env) => env.stack.stack,
+            Err(msg) => {
+                error(&format!("Notherlang Error: {}", msg));
+                Vec::new()
+            }
         }
-    })
+   })
 }

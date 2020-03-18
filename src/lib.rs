@@ -69,6 +69,7 @@ pub enum Command {
     End,
     Run,
     Return,
+    Pull,
 
     Include,
     PrintStack,
@@ -454,6 +455,19 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         return Err("reference required for put".into());
                     }
                 },
+                Command::Pull => {
+                    if let StackSlot::Number(n) = env.stack.pop().unwrap() {
+                        if n.is_sign_positive() && n.floor() == n {
+                            env.stack.push(env.stack.stack[n as usize].clone())
+                        } else if n.is_sign_negative() && n.floor() == n {
+                            env.stack.push(env.stack.stack[(env.stack.stack.len() as isize + n as isize) as usize].clone())
+                        } else {
+                            return  Err("expected integer for pull".into());
+                        }
+                    } else {
+                        return Err("expected integer for pull".into());
+                    }
+                },
                 Command::Reference(s) => {
                     let name: &str = s.split("@").collect::<Vec<&str>>()[1];
                     if env.definitions.contains_key(name) {
@@ -588,6 +602,8 @@ fn lexer(program: String) -> Environment {
                     Command::Drop,
                 "put" =>
                     Command::Put,
+                "pull" =>
+                    Command::Pull,
                 "->" =>
                     Command::ArrowPut,
                 "sub" =>
@@ -673,7 +689,9 @@ fn main() {
 #[wasm_bindgen]
 pub fn run_string(input: &str) -> String {
     format!("{:?}", {
+        let idx = ENV.lock().unwrap().program.len();
         ENV.lock().unwrap().program.append(&mut lexer(input.to_string()).program);
+        ENV.lock().unwrap().idx = idx;
         match run(&mut ENV.lock().unwrap()) {
             Ok(env) => env.stack.stack,
             Err(msg) => {

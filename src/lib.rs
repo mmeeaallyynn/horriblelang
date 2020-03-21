@@ -171,7 +171,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         return Err("public define needs a label".into());
                     }
                 } else if execute {
-                    if let StackSlot::String(string) = env.stack.pop().unwrap() {
+                    if let Some(StackSlot::String(string)) = env.stack.pop() {
                         log(&format!("{}", string.clone()));
                         env.define_new(string.to_string());
                         execute = false;
@@ -235,8 +235,8 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                     env.idx = call_stack.pop().unwrap().0 as usize;
                 },
                 Command::JmpIf => {
-                    if let StackSlot::Reference(n, _) = env.stack.pop().unwrap() {
-                        if let StackSlot::Number(f) = env.stack.pop().unwrap() {
+                    if let Some(StackSlot::Reference(n, _)) = env.stack.pop() {
+                        if let Some(StackSlot::Number(f)) = env.stack.pop() {
                             if f != 0.0 {
                                 call_stack.push((env.idx, n.clone()));
                                 env.idx = env.definitions[&n];
@@ -259,153 +259,172 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                     }
                 }
                 Command::Add => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (&right, &left) {
-                        env.stack.push(StackSlot::Number(l + r));
-                    } else if let (StackSlot::String(r), StackSlot::Number(l)) = (&right, &left) {
-                        env.stack.push(StackSlot::String(
-                            format!("{}{}", l, r)
-                        ));
-                    } else if let (StackSlot::Number(r), StackSlot::String(l)) = (&right, &left) {
-                        env.stack.push(StackSlot::String(
-                            format!("{}{}", l, r)
-                        ));
-                    } else if let (StackSlot::String(r), StackSlot::String(l)) = (&right, &left) {
-                        env.stack.push(StackSlot::String(
-                            format!("{}{}", l, r)
-                        ));
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (&right, &left) {
+                            env.stack.push(StackSlot::Number(l + r));
+                        } else if let (StackSlot::String(r), StackSlot::Number(l)) = (&right, &left) {
+                            env.stack.push(StackSlot::String(
+                                format!("{}{}", l, r)
+                            ));
+                        } else if let (StackSlot::Number(r), StackSlot::String(l)) = (&right, &left) {
+                            env.stack.push(StackSlot::String(
+                                format!("{}{}", l, r)
+                            ));
+                        } else if let (StackSlot::String(r), StackSlot::String(l)) = (&right, &left) {
+                            env.stack.push(StackSlot::String(
+                                format!("{}{}", l, r)
+                            ));
+                        } else {
+                            return Err("add operator only supported for numbers or strings".into());
+                        }
                     } else {
-                        return Err("add operator only supported for numbers or strings".into());
+                        return Err("stack underflow while adding!".into());
                     }
                 },
                 Command::Sub => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        env.stack.push(StackSlot::Number(l - r));
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                            env.stack.push(StackSlot::Number(l - r));
+                        } else {
+                            return Err("arithmetic is only supported for numbers".into());
+                        }
                     } else {
-                        return Err("arithmetic is only supported for numbers".into());
+                        return Err("stack underflow while subtracting!".into());
                     }
+
                 },
                 Command::Mul => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        env.stack.push(StackSlot::Number(l * r));
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                            env.stack.push(StackSlot::Number(l * r));
+                        } else {
+                            return Err("arithmetic is only supported for numbers".into());
+                        }
                     } else {
-                        return Err("arithmetic is only supported for numbers".into());
+                        return Err("stack underflow while multiplying!".into());
                     }
                 },
                 Command::Div => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        env.stack.push(StackSlot::Number(l / r));
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                            env.stack.push(StackSlot::Number(l / r));
+                        } else {
+                            return Err("arithmetic is only supported for numbers".into());
+                        }
                     } else {
-                        return Err("arithmetic is only supported for numbers".into());
+                        return Err("stack underflow while dividing!".into());
                     }
                 },
                 Command::LT => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        env.stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                            env.stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
+                        } else {
+                            return Err("arithmetic is only supported for numbers".into());
+                        }
                     } else {
-                        return Err("arithmetic is only supported for numbers".into());
+                        return Err("stack underflow while comparing!".into());
                     }
+
                 },
                 Command::LE => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        env.stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                            env.stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
+                        } else {
+                            return Err("arithmetic is only supported for numbers".into());
+                        }
                     } else {
-                        return Err("arithmetic is only supported for numbers".into());
+                        return Err("stack underflow while comparing!".into());
                     }
                 },
                 Command::GT => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        env.stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                            env.stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
+                        } else {
+                            return Err("arithmetic is only supported for numbers".into());
+                        }
                     } else {
-                        return Err("arithmetic is only supported for numbers".into());
+                        return Err("stack underflow while comparing!".into());
                     }
                 },
                 Command::GE => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
-                        env.stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                            env.stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
+                        } else {
+                            return Err("arithmetic is only supported for numbers".into());
+                        }
                     } else {
-                        return Err("arithmetic is only supported for numbers".into());
+                        return Err("stack underflow while comparing!".into());
                     }
                 },
                 Command::EQ => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    match (left, right) {
-                        (StackSlot::Number(r), StackSlot::Number(l)) =>
-                            env.stack.push(StackSlot::Number(if l == r { 1.0 } else { 0.0 })),
-                        (StackSlot::String(r), StackSlot::String(l)) =>
-                            env.stack.push(StackSlot::Number(if l == r { 1.0 } else { 0.0 })),
-                        (StackSlot::String(_), StackSlot::Number(_)) =>
-                            env.stack.push(StackSlot::Number(0.0)),
-                        (StackSlot::Number(_), StackSlot::String(_)) =>
-                            env.stack.push(StackSlot::Number(0.0)),
-                        _ => {
-                            return Err("equal is only supported for Strings and Numbers".into());
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        match (left, right) {
+                            (StackSlot::Number(r), StackSlot::Number(l)) =>
+                                env.stack.push(StackSlot::Number(if l == r { 1.0 } else { 0.0 })),
+                            (StackSlot::String(r), StackSlot::String(l)) =>
+                                env.stack.push(StackSlot::Number(if l == r { 1.0 } else { 0.0 })),
+                            (StackSlot::String(_), StackSlot::Number(_)) =>
+                                env.stack.push(StackSlot::Number(0.0)),
+                            (StackSlot::Number(_), StackSlot::String(_)) =>
+                                env.stack.push(StackSlot::Number(0.0)),
+                            _ => {
+                                return Err("equal is only supported for Strings and Numbers".into());
+                            }
                         }
+                    } else {
+                        return Err("stack underflow while comparing!".into());
                     }
                 },
                 Command::NE => {
-                    let right = env.stack.pop().unwrap();
-                    let left = env.stack.pop().unwrap();
-
-                    match (left, right) {
-                        (StackSlot::Number(r), StackSlot::Number(l)) =>
-                            env.stack.push(StackSlot::Number(if l != r { 1.0 } else { 0.0 })),
-                        (StackSlot::String(r), StackSlot::String(l)) =>
-                            env.stack.push(StackSlot::Number(if l != r { 1.0 } else { 0.0 })),
-                        (StackSlot::String(_), StackSlot::Number(_)) =>
-                            env.stack.push(StackSlot::Number(1.0)),
-                        (StackSlot::Number(_), StackSlot::String(_)) =>
-                            env.stack.push(StackSlot::Number(1.0)),
-                        _ => {
-                            return Err("not equal is only supported for Strings and Numbers".into());
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        match (left, right) {
+                            (StackSlot::Number(r), StackSlot::Number(l)) =>
+                                env.stack.push(StackSlot::Number(if l != r { 1.0 } else { 0.0 })),
+                            (StackSlot::String(r), StackSlot::String(l)) =>
+                                env.stack.push(StackSlot::Number(if l != r { 1.0 } else { 0.0 })),
+                            (StackSlot::String(_), StackSlot::Number(_)) =>
+                                env.stack.push(StackSlot::Number(1.0)),
+                            (StackSlot::Number(_), StackSlot::String(_)) =>
+                                env.stack.push(StackSlot::Number(1.0)),
+                            _ => {
+                                return Err("not equal is only supported for Strings and Numbers".into());
+                            }
                         }
+                    } else {
+                        return Err("stack underflow while comparing!".into());
                     }
                 },
                 Command::Not => {
-                    if let StackSlot::Number(n) = env.stack.pop().unwrap() {
-                        env.stack.push(StackSlot::Number(
-                            if n == 0.0 {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        ));
+                    if let Some(ss) = env.stack.pop() {
+                        if let StackSlot::Number(n) = ss {
+                            env.stack.push(StackSlot::Number(
+                                if n == 0.0 {
+                                    1.0
+                                } else {
+                                    0.0
+                                }
+                            ));
+                        } else {
+                            return Err("negation is only supported for Numbers".into());
+                        }
+                    } else {
+                        return Err("stack underflow while negating".into());
                     }
                 },
                 Command::Dup => {
                     env.stack.push(env.stack.stack[env.stack.stack.len() - 1].clone());
                 },
                 Command::Swap => {
-                    let top = env.stack.pop().unwrap();
-                    let bot = env.stack.pop().unwrap();
-
-                    env.stack.push(top);
-                    env.stack.push(bot);
+                    if let (Some(top), Some(bot)) = (env.stack.pop(), env.stack.pop()) {
+                        env.stack.push(top);
+                        env.stack.push(bot);
+                    } else {
+                        return Err("stack underflow while swapping".into());
+                    }
                 },
                 Command::Drop => {
                     env.stack.pop();
@@ -423,11 +442,12 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                 },
                 Command::ArrowPut => {
                     let value: Command;
-                    match env.stack.pop().unwrap() {
-                        StackSlot::Number(n) => value = Command::Pushn(n),
-                        StackSlot::String(s) => value = Command::Pushs(s),
-                        StackSlot::Reference(r, _p) => value = Command::Reference(String::from("@") + r.as_ref()),
-                        StackSlot::Code(_) => return Err("Code on stack unsupported!".into()),
+                    match env.stack.pop() {
+                        Some(StackSlot::Number(n)) => value = Command::Pushn(n),
+                        Some(StackSlot::String(s)) => value = Command::Pushs(s),
+                        Some(StackSlot::Reference(r, _p)) => value = Command::Reference(String::from("@") + r.as_ref()),
+                        Some(StackSlot::Code(_)) => return Err("Code on stack unsupported!".into()),
+                        None => return Err("stack underflow for arrow expression".into()),
                         _ => return Err("expected value for arrow expression".into())
                     };
 
@@ -444,12 +464,15 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                     }
                 },
                 Command::Put => {
-                    if let StackSlot::Reference(_, pos) = env.stack.pop().unwrap() {
-                        match env.stack.pop().unwrap() {
-                            StackSlot::Number(n) => env.program[pos + 1] = Command::Pushn(n),
-                            StackSlot::String(s) => env.program[pos + 1] = Command::Pushs(s),
-                            StackSlot::Reference(r, _p) => env.program[pos + 1] = Command::Reference(String::from("@") + r.as_ref()),
-                            StackSlot::Code(_) => {}
+                    if let Some(StackSlot::Reference(_, pos)) = env.stack.pop() {
+                        match env.stack.pop() {
+                            Some(StackSlot::Number(n)) => env.program[pos + 1] = Command::Pushn(n),
+                            Some(StackSlot::String(s)) => env.program[pos + 1] = Command::Pushs(s),
+                            Some(StackSlot::Reference(r, _p)) => env.program[pos + 1] = Command::Reference(String::from("@") + r.as_ref()),
+                            Some(StackSlot::Code(_)) => {}
+                            None => {
+                                return Err("value required for put".into());
+                            }
                         };
                     } else {
                         return Err("reference required for put".into());

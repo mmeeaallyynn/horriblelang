@@ -13,14 +13,14 @@ fibonacci is
   result is 0 in
 
   loop {
-    (a + b) -> @result
+    (@a! + @b!) -> @result
 
     @b! -> @a
     @result! -> @b
 
     @counter @std::dec!
 
-    (counter > 0) then {
+    (@counter! > 0) then {
       @loop!
     } @std::if!
   } @loop!
@@ -95,8 +95,8 @@ std {
 
     |
     loop_start {
-      (from < to) then {
-        (to - step) -> @to
+      (@from! < @to!) then {
+        (@to! - @step!) -> @to
         @to!
         @loop_start!
       } @std::if!
@@ -147,6 +147,7 @@ async function run() {
 
   document.getElementById("text").onkeydown = (event) => {
     if (event.key == "Enter" && event.shiftKey == true) {
+        event.preventDefault();
         document.getElementById("result").innerHTML = run_string(
         document.getElementById("text").value
       );

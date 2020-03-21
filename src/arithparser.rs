@@ -63,13 +63,24 @@ fn parse_value(prog: &Vec<&str>, i: &mut usize) -> Vec<Command> {
     let mut parsed: Vec<Command> = vec![];
 
     match prog[*i] {
-        n if n.parse::<f64>().is_ok() =>{
+        n if n.parse::<f64>().is_ok() => {
             parsed.push(Command::Pushn(prog[*i].parse::<f64>().unwrap()));
             *i += 1;
         },
-        n => {
-            parsed.push(Command::Reference("@".to_string() + n));
+        s if s.starts_with("@") && s.ends_with("!") => {
+            let mut name = String::from(s);
+            name.pop();
+            parsed.push(Command::Reference(name));
             parsed.push(Command::Jmp);
+            *i += 1;
+        },
+        s if s.starts_with("@") => {
+            parsed.push(Command::Reference(s.into()));
+            *i += 1;
+        }
+        s => {
+            log("is a string!");
+            parsed.push(Command::Pushs(s.into()));
             *i += 1;
         }
     }

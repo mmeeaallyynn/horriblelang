@@ -22,6 +22,8 @@ extern {
     pub fn log(s: &str);
     #[wasm_bindgen(js_namespace = console)]
     pub fn error(s: &str);
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn warn(s: &str);
     #[wasm_bindgen]
     pub fn eval(s: &str) -> f64;
 }
@@ -692,6 +694,9 @@ fn lexer(program: String) -> Environment {
                     Command::Print,
                 "_" => 
                     Command::Placeholder,
+                s if s == "\\space" => {
+                    Command::Pushs(String::from(" "))
+                },
                 s if String::from(s).starts_with("\"") => {
                     let mut string = String::from(s);
 
@@ -703,7 +708,8 @@ fn lexer(program: String) -> Environment {
 
                     Command::Pushs(String::from(&string)
                         .get(1..string.len() - 1).unwrap()
-                        .replace("\\\"", "\""))
+                        .replace("\\\"", "\"")
+                        .replace("\\n", "\n"))
                 },
                 s if String::from(s).starts_with("@") => {
                     if String::from(s).ends_with("!") {
@@ -748,7 +754,7 @@ pub fn run_string(input: &str) -> String {
             Ok(env) => env.stack,
             Err(msg) => {
                 error(&format!("Notherlang Error:\n{}", msg));
-                ENV.lock().unwrap().stack.clone()
+                Stack { stack: vec![] }
             }
         }
    })

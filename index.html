@@ -39,10 +39,6 @@ add is + in
 <div id="stackinfo" style="position: relative; float: left">
 </div>
 </div>
-
-<br>
-REPL<input type="text" id="repl"></input>
-<br>
 <button id="ok">OK</button>
 
 <div id="result"></div>
@@ -146,6 +142,9 @@ std {
     drop
     @accu!
   in
+  string is 
+    \space @std::join!
+  in
 }
 </script>
 
@@ -163,15 +162,6 @@ async function run() {
 	}
 
 	await wasm_bindgen("./pkg/notherlang_bg.wasm");
-
-  document.getElementById("repl").onkeydown = (event) => {
-    if (event.key == "Enter") {
-      document.getElementById("result").innerHTML = run_string(
-        document.getElementById("repl").value
-      );
-      document.getElementById("repl").value = "";
-    }
-  };
 
   document.getElementById("text").onkeydown = (event) => {
     if (event.key == "Enter" && event.shiftKey == true) {

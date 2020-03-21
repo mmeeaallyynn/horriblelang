@@ -51,10 +51,43 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
     parsed.push(op);
 
     if !(prog[*i] == ")") {
-        error(&format!("expected closing parenthesis, found {}", prog[*i]));
-        panic!();
+//        error(&format!("expected closing parenthesis, found {}", prog[*i]));
+//        panic!();
+        parsed.append(&mut parse_expression_continuation(prog, &mut i));
     }
     *i += 1;
+
+    parsed
+}
+
+fn parse_expression_continuation(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> {
+    warn("Notherlang: operator precedence is not supported, use parentheses instead!");
+
+    let mut parsed: Vec<Command> = vec![];
+
+    let op = match prog[*i] {
+        "+" => Command::Add,
+        "-" => Command::Sub,
+        "*" => Command::Mul,
+        ">" => Command::GT,
+        ">=" => Command::GE,
+        "<" => Command::LT,
+        "<=" => Command::LE,
+        "==" => Command::EQ,
+        "!=" => Command::NE,
+        _ => {
+            error(&format!("invalid operator: {}", prog[*i]));
+            panic!();
+        }
+    };
+    *i += 1;
+
+    parsed.append(&mut parse_expression(prog, &mut i));
+    parsed.push(op);
+
+    if !(prog[*i] == ")") {
+        parsed.append(&mut parse_expression_continuation(prog, &mut i));
+    }
 
     parsed
 }

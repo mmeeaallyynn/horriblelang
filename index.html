@@ -3,8 +3,8 @@
 <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
 </head>
 <body>
-
-<textarea rows="40" cols="80" id="text" style="background: #FFF; color: #000; font-size: 1.5em">
+<div id=stuff style="position: relative; overflow: hidden">
+<textarea rows="40" cols="80" id="text" style="background: #FFF; color: #000; font-size: 1.5em; position: relative; float: left">
 fibonacci is
   counter is _ in
 
@@ -35,8 +35,11 @@ in
 add is + in
 0 -> @std::fold::accu
 1 10 @std::range! @add @std::fold!
-
 </textarea>
+<div id="stackinfo" style="position: relative; float: left">
+</div>
+</div>
+
 <br>
 REPL<input type="text" id="repl"></input>
 <br>
@@ -46,6 +49,13 @@ REPL<input type="text" id="repl"></input>
 
 <script type="text/notherlang">
 std {
+  op {
+    "+" is + in
+    "-" is - in
+    "*" is * in
+    "/" is / in
+    "drop" is drop in
+  }
   if is
     @then jump?
   in
@@ -74,6 +84,7 @@ std {
     func is _ in
     accu is _ in
 
+    -> @accu
     -> @func
 
     loop_start {
@@ -117,6 +128,24 @@ std {
 
     drop
   in
+  join is 
+    guard is "|" in
+    sep is _ in
+    accu is "" in
+
+    -> @sep
+    -> @accu
+
+    loop_start {
+      dup @guard! != then {
+        @sep! @accu! + + -> @accu
+        @loop_start!
+      } @std::if!
+    } @loop_start!
+
+    drop
+    @accu!
+  in
 }
 </script>
 
@@ -146,8 +175,8 @@ async function run() {
 
   document.getElementById("text").onkeydown = (event) => {
     if (event.key == "Enter" && event.shiftKey == true) {
-        event.preventDefault();
-        document.getElementById("result").innerHTML = run_string(
+      event.preventDefault();
+      document.getElementById("stackinfo").innerHTML = run_string(
         document.getElementById("text").value
       );
     }

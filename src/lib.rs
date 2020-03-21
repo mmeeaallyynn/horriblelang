@@ -174,6 +174,12 @@ impl fmt::Display for RuntimeError {
     }
 }
 
+impl fmt::Display for Stack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.stack.iter().map(|e| format!("{:?}<br>", e)).fold(String::default(), |acc, e| acc + &e))
+    }
+}
+
 fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
     let mut execute = true;
     let mut level = 0;
@@ -734,15 +740,15 @@ fn main() {
 
 #[wasm_bindgen]
 pub fn run_string(input: &str) -> String {
-    format!("{:?}", {
+    format!("{}", {
         let idx = ENV.lock().unwrap().program.len();
         ENV.lock().unwrap().program.append(&mut lexer(input.to_string()).program);
         ENV.lock().unwrap().idx = idx;
         match run(&mut ENV.lock().unwrap()) {
-            Ok(env) => env.stack.stack,
+            Ok(env) => env.stack,
             Err(msg) => {
                 error(&format!("Notherlang Error:\n{}", msg));
-                Vec::new()
+                ENV.lock().unwrap().stack.clone()
             }
         }
    })

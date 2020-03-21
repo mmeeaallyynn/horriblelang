@@ -7,6 +7,7 @@ extern crate regex;
 use wasm_bindgen::prelude::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::fmt;
 
 use lazy_static::lazy_static;
 
@@ -90,6 +91,12 @@ struct Stack {
     stack: Vec<StackSlot>
 }
 
+#[derive(Debug)]
+struct RuntimeError {
+    msg: String,
+    call_stack: Vec<(usize, String)>
+}
+
 #[derive(Clone, Debug)]
 struct Environment {
     prefix: Vec<String>,
@@ -152,7 +159,22 @@ impl Stack {
     }
 }
 
-fn run(mut env: &mut Environment) -> Result<Environment, String> {
+impl RuntimeError {
+    fn new(msg: String, call_stack: Vec<(usize, String)>) -> Self {
+        RuntimeError {
+            msg, call_stack
+        }
+    }
+}
+
+impl fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let call_info = self.call_stack.iter().map(|f| f.1.clone()).collect::<Vec<String>>();
+        write!(f, "RuntimeError: {}\ncallstack: {:#?}", self.msg, call_info)
+    }
+}
+
+fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
     let mut execute = true;
     let mut level = 0;
 
@@ -168,7 +190,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         level += 1;
                     }
                     else {
-                        return Err("public define needs a label".into());
+                        return Err(RuntimeError::new("public define needs a label".into(), call_stack));
                     }
                 } else if execute {
                     if let Some(StackSlot::String(string)) = env.stack.pop() {
@@ -178,7 +200,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         level += 1;
                     }
                     else {
-                        return Err("string required for private define".into());
+                        return Err(RuntimeError::new("string required for private define".into(), call_stack));
                     }
                 }
             }
@@ -224,7 +246,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                             env.program.insert(env.idx + 1, token.clone());
                         }
                     } else {
-                        return Err("expected file name for include");
+                        return Err(RuntimeError::new("expected file name for include");
                     }
                     */
                 }
@@ -243,11 +265,11 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                                 env.idx = env.definitions[&n];
                             }
                         } else {
-                            return Err("expected number for a conditional jump".into())
+                            return Err(RuntimeError::new("expected number for a conditional jump".into(), call_stack))
 
                         }
                     } else {
-                        return Err("expected reference for a jump".into());
+                        return Err(RuntimeError::new("expected reference for a jump".into(), call_stack));
 
                     }
                 }
@@ -256,7 +278,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         call_stack.push((env.idx, n.clone()));
                         env.idx = env.definitions[&n];
                     } else {
-                        return Err("expected reference for a jump".into());
+                        return Err(RuntimeError::new("expected reference for a jump".into(), call_stack));
                     }
                 }
                 Command::Add => {
@@ -276,10 +298,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                                 format!("{}{}", l, r)
                             ));
                         } else {
-                            return Err("add operator only supported for numbers or strings".into());
+                            return Err(RuntimeError::new("add operator only supported for numbers or strings".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while adding!".into());
+                        return Err(RuntimeError::new("stack underflow while adding!".into(), call_stack));
                     }
                 },
                 Command::Sub => {
@@ -287,10 +309,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(l - r));
                         } else {
-                            return Err("arithmetic is only supported for numbers".into());
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while subtracting!".into());
+                        return Err(RuntimeError::new("stack underflow while subtracting!".into(), call_stack));
                     }
 
                 },
@@ -299,10 +321,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(l * r));
                         } else {
-                            return Err("arithmetic is only supported for numbers".into());
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while multiplying!".into());
+                        return Err(RuntimeError::new("stack underflow while multiplying!".into(), call_stack));
                     }
                 },
                 Command::Div => {
@@ -310,10 +332,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(l / r));
                         } else {
-                            return Err("arithmetic is only supported for numbers".into());
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while dividing!".into());
+                        return Err(RuntimeError::new("stack underflow while dividing!".into(), call_stack));
                     }
                 },
                 Command::LT => {
@@ -321,10 +343,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
                         } else {
-                            return Err("arithmetic is only supported for numbers".into());
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while comparing!".into());
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), call_stack));
                     }
 
                 },
@@ -333,10 +355,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
                         } else {
-                            return Err("arithmetic is only supported for numbers".into());
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while comparing!".into());
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), call_stack));
                     }
                 },
                 Command::GT => {
@@ -344,10 +366,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
                         } else {
-                            return Err("arithmetic is only supported for numbers".into());
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while comparing!".into());
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), call_stack));
                     }
                 },
                 Command::GE => {
@@ -355,10 +377,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
                         } else {
-                            return Err("arithmetic is only supported for numbers".into());
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while comparing!".into());
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), call_stack));
                     }
                 },
                 Command::EQ => {
@@ -373,11 +395,11 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                             (StackSlot::Number(_), StackSlot::String(_)) =>
                                 env.stack.push(StackSlot::Number(0.0)),
                             _ => {
-                                return Err("equal is only supported for Strings and Numbers".into());
+                                return Err(RuntimeError::new("equal is only supported for Strings and Numbers".into(), call_stack));
                             }
                         }
                     } else {
-                        return Err("stack underflow while comparing!".into());
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), call_stack));
                     }
                 },
                 Command::NE => {
@@ -392,11 +414,11 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                             (StackSlot::Number(_), StackSlot::String(_)) =>
                                 env.stack.push(StackSlot::Number(1.0)),
                             _ => {
-                                return Err("not equal is only supported for Strings and Numbers".into());
+                                return Err(RuntimeError::new("not equal is only supported for Strings and Numbers".into(), call_stack));
                             }
                         }
                     } else {
-                        return Err("stack underflow while comparing!".into());
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), call_stack));
                     }
                 },
                 Command::Not => {
@@ -410,10 +432,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                                 }
                             ));
                         } else {
-                            return Err("negation is only supported for Numbers".into());
+                            return Err(RuntimeError::new("negation is only supported for Numbers".into(), call_stack));
                         }
                     } else {
-                        return Err("stack underflow while negating".into());
+                        return Err(RuntimeError::new("stack underflow while negating".into(), call_stack));
                     }
                 },
                 Command::Dup => {
@@ -424,7 +446,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         env.stack.push(top);
                         env.stack.push(bot);
                     } else {
-                        return Err("stack underflow while swapping".into());
+                        return Err(RuntimeError::new("stack underflow while swapping".into(), call_stack));
                     }
                 },
                 Command::Drop => {
@@ -447,9 +469,9 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         Some(StackSlot::Number(n)) => value = Command::Pushn(n),
                         Some(StackSlot::String(s)) => value = Command::Pushs(s),
                         Some(StackSlot::Reference(r, _p)) => value = Command::Reference(String::from("@") + r.as_ref()),
-                        Some(StackSlot::Code(_)) => return Err("Code on stack unsupported!".into()),
-                        None => return Err("stack underflow for arrow expression".into()),
-                        _ => return Err("expected value for arrow expression".into())
+                        Some(StackSlot::Code(_)) => return Err(RuntimeError::new("Code on stack unsupported!".into(), call_stack)),
+                        None => return Err(RuntimeError::new("stack underflow for arrow expression".into(), call_stack)),
+                        _ => return Err(RuntimeError::new("expected value for arrow expression".into(), call_stack))
                     };
 
                     if let Command::Reference(name) = &env.program[env.idx + 1] {
@@ -458,10 +480,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                             env.idx += 1;
                         }
                         else {
-                            return Err(format!("no such symbol: `{}`", name));
+                            return Err(RuntimeError::new(format!("no such symbol: `{}`", name), call_stack));
                         }
                     } else {
-                        return Err("reference required for arrow put".into());
+                        return Err(RuntimeError::new("reference required for arrow put".into(), call_stack));
                     }
                 },
                 Command::Put => {
@@ -472,11 +494,11 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                             Some(StackSlot::Reference(r, _p)) => env.program[pos + 1] = Command::Reference(String::from("@") + r.as_ref()),
                             Some(StackSlot::Code(_)) => {}
                             None => {
-                                return Err("value required for put".into());
+                                return Err(RuntimeError::new("value required for put".into(), call_stack));
                             }
                         };
                     } else {
-                        return Err("reference required for put".into());
+                        return Err(RuntimeError::new("reference required for put".into(), call_stack));
                     }
                 },
                 Command::Pull => {
@@ -486,10 +508,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         } else if n.is_sign_negative() && n.floor() == n {
                             env.stack.push(env.stack.stack[(env.stack.stack.len() as isize + n as isize) as usize].clone())
                         } else {
-                            return  Err("expected integer for pull".into());
+                            return Err(RuntimeError::new("expected integer for pull".into(), call_stack));
                         }
                     } else {
-                        return Err("expected integer for pull".into());
+                        return Err(RuntimeError::new("expected integer for pull".into(), call_stack));
                     }
                 },
                 Command::Reference(s) => {
@@ -497,7 +519,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                     if env.definitions.contains_key(name) {
                         env.stack.push(StackSlot::Reference(String::from(name), env.definitions[name]));
                     } else {
-                        return Err(format!("no such symbol: `{}`", name));
+                        return Err(RuntimeError::new(format!("no such symbol: `{}`", name), call_stack));
                     }
                 },
                 Command::AddressOf => {
@@ -506,11 +528,11 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         if env.definitions.contains_key(s) {
                             env.stack.push(StackSlot::Reference(String::from(s), env.definitions[s]));
                         } else {
-                            return Err(format!("no such symbol: `{}`", s));
+                            return Err(RuntimeError::new(format!("no such symbol: `{}`", s), call_stack));
 
                         }
                     } else {
-                        return Err("string required".into());
+                        return Err(RuntimeError::new("string required".into(), call_stack));
                     }
                 },
                 Command::SubProg => {
@@ -536,10 +558,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                             Ok(new_env) => for item in new_env.stack.stack {
                                 env.stack.push(item);
                             },
-                            Err(e) => return Err(format!("lambda error: {}", e))
+                            Err(e) => return Err(RuntimeError::new(format!("lambda error: {}", e), call_stack))
                         }
                     } else {
-                        return Err("run requires lambda on stack".into());
+                        return Err(RuntimeError::new("run requires lambda on stack".into(), call_stack));
                     }
                 }
                 Command::Lambda => {
@@ -560,11 +582,11 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
                         env.stack.push(StackSlot::Number(eval(s.as_ref())));
                     }
                     else {
-                        return Err("javascript needs to be a string".into());
+                        return Err(RuntimeError::new("javascript needs to be a string".into(), call_stack));
                     },
                 Command::Placeholder => {
                     let call_info = call_stack.iter().map(|f| f.1.clone()).collect::<Vec<String>>();
-                    return Err(format!("encountered placeholder in {:#?}", call_info));
+                    return Err(RuntimeError::new(format!("encountered placeholder in {:#?}", call_info), call_stack));
                 },
                 _ => {}
             }
@@ -719,7 +741,7 @@ pub fn run_string(input: &str) -> String {
         match run(&mut ENV.lock().unwrap()) {
             Ok(env) => env.stack.stack,
             Err(msg) => {
-                error(&format!("Notherlang Error: {}", msg));
+                error(&format!("Notherlang Error:\n{}", msg));
                 Vec::new()
             }
         }

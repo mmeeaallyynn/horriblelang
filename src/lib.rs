@@ -195,6 +195,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, String> {
 
                         execute = true;
                         env.idx += 1;
+                        continue;
                     }
                 },
                 _ => {}

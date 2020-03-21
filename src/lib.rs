@@ -185,6 +185,7 @@ impl fmt::Display for Stack {
 fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
     let mut execute = true;
     let mut level = 0;
+    let mut lambda_counter = 0;
 
     let mut call_stack: Vec<(usize, String)> = Vec::new();
 
@@ -572,7 +573,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         return Err(RuntimeError::new("run requires lambda on stack".into(), call_stack));
                     }
                 }
-                Command::Lambda => {
+                Command::Lambda => { /*
                     let mut lambda_prog: Vec<Command> = Vec::new();
                     env.idx += 1;
                     while env.program[env.idx] != Command::End {
@@ -580,7 +581,17 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         env.idx += 1;
                     }
 
-                    env.stack.push(StackSlot::Code(lambda_prog));
+                    env.stack.push(StackSlot::Code(lambda_prog));*/
+                    let lambda_name = format!("__lambda_{}", lambda_counter);
+
+                    env.define_new(lambda_name.clone());
+                    env.stack.push(StackSlot::Reference(String::from(&lambda_name), env.definitions[&lambda_name]));
+
+                    // the would-be name will be dropped
+                    env.stack.push(StackSlot::Number(-1.0));
+                    lambda_counter += 1;
+                    execute = false;
+                    level += 1;
                 }
                 Command::End => {
                     break;

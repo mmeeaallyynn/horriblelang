@@ -212,7 +212,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         return Err(RuntimeError::new("string required for private define".into(), call_stack));
                     }
                 }
-            }
+            },
+            Command::Lambda => {
+                level += 1;
+            },
             _ => {}
         }
 
@@ -591,7 +594,6 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     env.stack.push(StackSlot::Number(-1.0));
                     lambda_counter += 1;
                     execute = false;
-                    level += 1;
                 }
                 Command::End => {
                     break;
@@ -604,8 +606,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         return Err(RuntimeError::new("javascript needs to be a string".into(), call_stack));
                     },
                 Command::Placeholder => {
-                    let call_info = call_stack.iter().map(|f| f.1.clone()).collect::<Vec<String>>();
-                    return Err(RuntimeError::new(format!("encountered placeholder in {:#?}", call_info), call_stack));
+                    return Err(RuntimeError::new(format!("encountered placeholder"), call_stack));
                 },
                 _ => {}
             }

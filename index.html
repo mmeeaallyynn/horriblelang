@@ -3,8 +3,10 @@
 <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
 </head>
 <body>
-<div id=stuff style="position: relative; overflow: hidden">
-<textarea rows="40" cols="80" id="text" style="background: #FFF; color: #000; font-size: 1.5em; position: relative; float: left">
+<div id=stuff style="position: relative; overflow: hidden; resize: both">
+<div id="lines" rows="40" cols="2" style="padding-top: 3px; background: #FFF; color: #000; font-size: 12pt; position: relative; float: left; overflow: hidden">
+</div>
+<textarea rows="2000" cols="80" id="text" style="background: #FFF; color: #000; font-size: 12pt; position: relative; float: left">
 fibonacci is
   counter is _ in
 
@@ -32,9 +34,7 @@ in
 "a number:" @std::prompt! -> @fibonacci::counter
 "result: " @fibonacci! + @std::alert!
 
-add is + in
-0 -> @std::fold::accu
-1 10 @std::range! @add @std::fold!
+1 10 @std::range! @std::op::+ 0 @std::fold!
 </textarea>
 <div id="stackinfo" style="position: relative; float: left">
 </div>
@@ -153,31 +153,43 @@ std {
 <script type="module">
 const { produce, run_string } = wasm_bindgen;
 async function run() {
-	let prog = "";
+    let prog = "";
 
-	for(let tag of document.getElementsByTagName("script")) {
-		if(tag.type == "text/notherlang") {
-			prog += tag.innerHTML;
-		}
-	}
-
-	await wasm_bindgen("./pkg/notherlang_bg.wasm");
-
-  document.getElementById("text").onkeydown = (event) => {
-    if (event.key == "Enter" && event.shiftKey == true) {
-      event.preventDefault();
-      document.getElementById("stackinfo").innerHTML = run_string(
-        document.getElementById("text").value
-      );
+    for(let tag of document.getElementsByTagName("script")) {
+	    if(tag.type == "text/notherlang") {
+		    prog += tag.innerHTML;
+	    }
     }
-  };
 
-  document.getElementById("result").innerHTML = run_string(prog);
-	document.getElementById("ok").onclick = () => {
-	  document.getElementById("result").innerHTML = run_string(
-	    document.getElementById("text").value
-    );
-	}
+    await wasm_bindgen("./pkg/notherlang_bg.wasm");
+
+    let lines = document.getElementById("lines");
+    let text = document.getElementById("text");
+    let container = document.getElementById("stuff");
+
+    text.onresize = (event) => {
+        lines.style.height = text.clientHeight;
+    }
+
+    let range = Array.from(new Array(2000), (x, i) => i).join("<br>")
+    lines.innerHTML = range;
+
+    document.getElementById("text").onkeydown = (event) => {
+        if (event.key == "Enter" && event.shiftKey == true) {
+            event.preventDefault();
+            document.getElementById("stackinfo").innerHTML = run_string(
+                document.getElementById("text").value
+            );
+        }
+    };
+
+    document.getElementById("result").innerHTML = run_string(prog);
+
+    document.getElementById("ok").onclick = () => {
+        document.getElementById("result").innerHTML = run_string(
+            document.getElementById("text").value
+        );
+    }
 }
 run();
 </script>

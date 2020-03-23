@@ -1,6 +1,12 @@
 <html>
 <head>
 <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+<style>
+* {
+  color: #BBB !important;
+  background-color: #333 !important;;
+}
+</style>
 </head>
 <body>
 <div id=stuff style="position: relative; overflow: hidden; resize: both">
@@ -144,6 +150,24 @@ std {
   in
   string is 
     \space @std::join!
+  in
+  pow is
+    base is _ in
+    exp  is _ in
+    val  is 1 in
+
+    -> @exp
+    -> @base
+    1 -> @val
+
+    0 @exp! @std::range!
+    lambda 
+      drop
+      (@base! * @val!) -> @val
+    in
+    @std::foreach!
+
+    @val!
   in
 }
 </script>

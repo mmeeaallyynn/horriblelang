@@ -155,17 +155,22 @@ std {
     base is _ in
     exp  is _ in
     val  is 1 in
+    op   is @std::op::* in
 
+    1 -> @val
     -> @exp
     -> @base
-    1 -> @val
 
-    0 @exp! @std::range!
-    lambda 
+    (@exp! < 0) lambda
+      @std::op::/ -> @op
+      (@exp! * -1) -> @exp
+    in jump?
+
+    0 @exp! @std::range! 
+    lambda
       drop
-      (@base! * @val!) -> @val
-    in
-    @std::foreach!
+      @val! @base! @op! jump -> @val
+    in @std::foreach!
 
     @val!
   in
@@ -199,11 +204,49 @@ async function run() {
     lines.innerHTML = range;
 
     document.getElementById("text").onkeydown = (event) => {
+        // shift+enter to execute contents
         if (event.key == "Enter" && event.shiftKey == true) {
             event.preventDefault();
             document.getElementById("stackinfo").innerHTML = run_string(
                 document.getElementById("text").value
             );
+        }
+        // expected behaviour for tab and shift+tab
+        else if (event.key == "Tab") {
+            let lines = text.value.split("\n");
+
+            let selectionStart = text.selectionStart;
+            let selectionEnd = text.selectionEnd;
+
+            let lineNumberStart = text.value.slice(0, selectionStart).split("\n").length
+            let lineNumberEnd = text.value.slice(0, selectionEnd).split("\n").length
+
+            let multipleLinesSelected = (lineNumberStart != lineNumberEnd);
+            let beginningOfLine = ["\n", undefined].includes(text.value[selectionStart - 1]);
+
+            for (let lineNumber = lineNumberStart; lineNumber < lineNumberEnd; lineNumber++) {
+                if (event.shiftKey) {
+                    if (lines[lineNumber - 1].startsWith("\t")) {
+                        lines[lineNumber - 1] = lines[lineNumber - 1].slice(1);
+                        text.selectionStart = selectionStart - (beginningOfLine ? 0: 1);
+                        text.selectionEnd = selectionEnd - (beginningOfLine ? 0: 1);
+                   }
+                }
+                else {
+                    if (multipleLinesSelected) {
+                        lines[lineNumber - 1] = "\t" + lines[lineNumber - 1];
+                    }
+                    else {
+                        console.log(lineNumberStart != lineNumberEnd)
+
+                        text.value = text.value.slice(0, selectionStart) + "\t" + text.value.slice(selectionEnd);
+                        text.selectionStart = selectionStart + 1;
+                        text.selectionEnd = selectionEnd + 1;
+                    }
+                }
+            }
+            text.value = lines.join("\n");
+            event.preventDefault();
         }
     };
 

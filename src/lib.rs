@@ -239,6 +239,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
         if execute {
             match &env.program[env.idx] {
                 Command::Include => {
+                    
 //                    if let StackSlot::String(filename) = env.stack.pop().unwrap() {
                         //let comment = Regex::new(r"/\*.*\*/").unwrap();
 /*

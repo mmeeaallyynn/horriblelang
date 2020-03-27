@@ -155,9 +155,11 @@ std {
     base is _ in
     exp  is _ in
     val  is 1 in
-    op   is @std::op::* in
+    op   is _ in
 
     1 -> @val
+    @std::op::* -> @op
+
     -> @exp
     -> @base
 

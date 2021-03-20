@@ -65,6 +65,7 @@ pub enum Command {
     Swap,
     Drop,
     Put,
+    Get,
     ArrowPut,
     AddressOf,
     SubProg,
@@ -74,6 +75,7 @@ pub enum Command {
     Return,
     Pull,
 
+    Nop,
     Include,
     PrintStack,
     JSEval,
@@ -238,6 +240,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
 
         if execute {
             match &env.program[env.idx] {
+                Command::Nop => { },
                 Command::Include => {
                     
 //                    if let StackSlot::String(filename) = env.stack.pop().unwrap() {
@@ -309,6 +312,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         } else if let (StackSlot::String(r), StackSlot::String(l)) = (&right, &left) {
                             env.stack.push(StackSlot::String(
                                 format!("{}{}", l, r)
+                            ));
+                        } else if let (StackSlot::Number(r), StackSlot::Reference(name, l)) = (&right, &left) {
+                            env.stack.push(StackSlot::Reference(
+                                format!("{}+{}", name, l), *r as usize + l
                             ));
                         } else {
                             return Err(RuntimeError::new("add operator only supported for numbers or strings".into(), call_stack));
@@ -514,6 +521,17 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         return Err(RuntimeError::new("reference required for put".into(), call_stack));
                     }
                 },
+                Command::Get => {
+                    if let Some(StackSlot::Reference(_, pos)) = env.stack.pop() {
+                            match env.program.get(pos + 1) {
+                                Some(Command::Pushn(n)) => env.stack.push(StackSlot::Number(*n)),
+                                Some(Command::Pushs(s)) => env.stack.push(StackSlot::String(s.clone())),
+                                _ => return Err(RuntimeError::new("value required for get".into(), call_stack))
+                            }
+                    } else {
+                        return Err(RuntimeError::new("reference required for get".into(), call_stack));
+                    }
+                }
                 Command::Pull => {
                     if let StackSlot::Number(n) = env.stack.pop().unwrap() {
                         if n.is_sign_positive() && n.floor() == n {
@@ -635,6 +653,12 @@ fn lexer(program: String) -> Environment {
     while idx < prog.len() {
         let next: Command =
             match prog[idx].as_ref() {
+                ";" =>
+                    Command::Nop,
+                "[" =>
+                    Command::Nop,
+                "]" =>
+                    Command::Nop,
                 "include" =>
                     Command::Include,
                 "STACK" =>
@@ -669,6 +693,8 @@ fn lexer(program: String) -> Environment {
                     Command::Drop,
                 "put" =>
                     Command::Put,
+                "get" =>
+                    Command::Get,
                 "pull" =>
                     Command::Pull,
                 "->" =>

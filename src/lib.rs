@@ -732,7 +732,7 @@ fn lexer(program: String) -> Environment {
                 "print" =>
                     Command::Print,
                 "_" => 
-                    Command::Placeholder,
+                    Command::Return,
                 s if s == "\\space" => {
                     Command::Pushs(String::from(" "))
                 },

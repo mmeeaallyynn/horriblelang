@@ -52,6 +52,17 @@ in
 <script type="text/notherlang">
 STACK_START
 
+memory {
+  mem is _100 in
+  idx is 0 in
+
+  alloc is
+    @memory::mem @memory::idx! +
+    swap
+    @memory::idx! + -> @memory::idx
+  in
+}
+
 std {
   op {
     "+" is + in

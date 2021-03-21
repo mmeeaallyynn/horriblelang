@@ -50,6 +50,8 @@ in
 <div id="result"></div>
 
 <script type="text/notherlang">
+STACK_START
+
 std {
   op {
     "+" is + in
@@ -148,6 +150,15 @@ std {
     drop
     @accu!
   in
+  droplist is
+    lambda drop in @std::foreach!
+  in
+  dropall is
+    STACK_START -> @std::foreach::guard
+    lambda drop in @std::foreach!
+    "|" -> @std::foreach::guard
+    STACK_START
+  in
   string is 
     \space @std::join!
   in
@@ -226,28 +237,39 @@ async function run() {
             let multipleLinesSelected = (lineNumberStart != lineNumberEnd);
             let beginningOfLine = ["\n", undefined].includes(text.value[selectionStart - 1]);
 
-            for (let lineNumber = lineNumberStart; lineNumber < lineNumberEnd; lineNumber++) {
+            if (!multipleLinesSelected) {
+                console.log("single line");
                 if (event.shiftKey) {
-                    if (lines[lineNumber - 1].startsWith("\t")) {
-                        lines[lineNumber - 1] = lines[lineNumber - 1].slice(1);
-                        text.selectionStart = selectionStart - (beginningOfLine ? 0: 1);
-                        text.selectionEnd = selectionEnd - (beginningOfLine ? 0: 1);
-                   }
+                    if (lines[lineNumberStart - 1].startsWith("\t")) {
+                        lines[lineNumberStart - 1] = lines[lineNumberStart - 1].slice(1);
+                        console.log("beginning of line: ", beginningOfLine, selectionStart);
+                        text.value = lines.join("\n");
+                        text.selectionStart -=(beginningOfLine ? 0: 1);
+                        text.selectionEnd -= (beginningOfLine ? 0: 1);
+                    }
                 }
                 else {
-                    if (multipleLinesSelected) {
-                        lines[lineNumber - 1] = "\t" + lines[lineNumber - 1];
-                    }
-                    else {
-                        console.log(lineNumberStart != lineNumberEnd)
-
-                        text.value = text.value.slice(0, selectionStart) + "\t" + text.value.slice(selectionEnd);
-                        text.selectionStart = selectionStart + 1;
-                        text.selectionEnd = selectionEnd + 1;
-                    }
+                    text.value = text.value.slice(0, selectionStart) + "\t" + text.value.slice(selectionEnd);
+                    text.selectionStart = selectionStart + 1;
+                    text.selectionEnd = selectionEnd + 1;
                 }
             }
-            text.value = lines.join("\n");
+            else {
+                console.log("multiple lines");
+                for (let lineNumber = lineNumberStart; lineNumber < lineNumberEnd; lineNumber++) {
+                    if (event.shiftKey) {
+                        if (lines[lineNumber - 1].startsWith("\t")) {
+                            lines[lineNumber - 1] = lines[lineNumber - 1].slice(1);
+                            text.selectionStart = selectionStart - (beginningOfLine ? 0: 1);
+                            text.selectionEnd = selectionEnd - (beginningOfLine ? 0: 1);
+                       }
+                    }
+                    else {
+                        lines[lineNumber - 1] = "\t" + lines[lineNumber - 1];
+                    }
+                }
+                text.value = lines.join("\n");
+            }
             event.preventDefault();
         }
     };

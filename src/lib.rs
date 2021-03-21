@@ -2,12 +2,11 @@
 
 mod arithparser;
 
-extern crate regex;
-
 use wasm_bindgen::prelude::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::fmt;
+use regex::Regex;
 
 use lazy_static::lazy_static;
 
@@ -641,10 +640,12 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
 fn lexer(program: String) -> Environment {
     let mut commands: Vec<Command> = Vec::new();
     let mut idx = 0;
+    let comment = Regex::new(r"/\*.*\*/").unwrap();
 
     let mut preprocessed = program;
     preprocessed = preprocessed.replace("(", " ( ");
     preprocessed = preprocessed.replace(")", " ) ");
+    preprocessed = comment.replace_all(preprocessed.as_ref(), "").to_string();
 
     let prog: Vec<&str> = preprocessed
         .split_whitespace()

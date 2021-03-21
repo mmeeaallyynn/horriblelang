@@ -50,7 +50,15 @@ in
 <div id="result"></div>
 
 <script type="text/notherlang">
+/* place a guard at the beginning of the stack to detect possible underflow errors */
 STACK_START
+
+/* toplevel drop that doesn't remove the stack guard" */
+"drop" is
+  dup STACK_START != lambda
+    drop
+  in jump?
+in
 
 memory {
   mem is _100 in

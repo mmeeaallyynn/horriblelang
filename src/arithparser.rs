@@ -105,12 +105,12 @@ fn parse_value(prog: &Vec<&str>, i: &mut usize) -> Vec<Command> {
         s if s.starts_with("@") && s.ends_with("!") => {
             let mut name = String::from(s);
             name.pop();
-            parsed.push(Command::Reference(name));
+            parsed.push(Command::Reference(name, 0));
             parsed.push(Command::Jmp);
             *i += 1;
         },
         s if s.starts_with("@") => {
-            parsed.push(Command::Reference(s.into()));
+            parsed.push(Command::Reference(s.into(), 0));
             *i += 1;
         }
         s => {

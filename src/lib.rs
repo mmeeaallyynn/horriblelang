@@ -58,7 +58,7 @@ pub enum Command {
     LE,
     EQ,
     NE,
-    Reference(String),
+    Reference(String, usize),
     Print,
     Not,
     Dup,
@@ -205,7 +205,6 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     }
                 } else if execute {
                     if let Some(StackSlot::String(string)) = env.stack.pop() {
-                        log(&format!("{}", string.clone()));
                         env.define_new(string.to_string());
                         execute = false;
                         level += 1;
@@ -223,6 +222,9 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
 
         if !execute {
             match &env.program[env.idx] {
+                Command::Lambda => {
+                    env.define_new("lambda".into());
+                },
                 Command::EndDefine => {
                     env.prefix.pop();
                     level -= 1;
@@ -274,11 +276,11 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     env.idx = call_stack.pop().unwrap().0 as usize;
                 },
                 Command::JmpIf => {
-                    if let Some(StackSlot::Reference(n, _)) = env.stack.pop() {
+                    if let Some(StackSlot::Reference(n, offset)) = env.stack.pop() {
                         if let Some(StackSlot::Number(f)) = env.stack.pop() {
                             if f != 0.0 {
                                 call_stack.push((env.idx, n.clone()));
-                                env.idx = env.definitions[&n];
+                                env.idx = env.definitions[&n] + offset;
                             }
                         } else {
                             return Err(RuntimeError::new("expected number for a conditional jump".into(), call_stack))
@@ -290,9 +292,13 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     }
                 }
                 Command::Jmp => {
-                    if let StackSlot::Reference(n, _) = env.stack.pop().unwrap() {
+                    if let StackSlot::Reference(n, offset) = env.stack.pop().unwrap() {
                         call_stack.push((env.idx, n.clone()));
-                        env.idx = env.definitions[&n];
+                        if env.definitions.contains_key(&n) {
+                            env.idx = env.definitions[&n] + offset;
+                        } else {
+                            return Err(RuntimeError::new("reference not found in definitions".into(), call_stack));
+                        }
                     } else {
                         return Err(RuntimeError::new("expected reference for a jump".into(), call_stack));
                     }
@@ -315,7 +321,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                             ));
                         } else if let (StackSlot::Number(r), StackSlot::Reference(name, l)) = (&right, &left) {
                             env.stack.push(StackSlot::Reference(
-                                format!("{}+{}", name, l), *r as usize + l
+                                name.clone(), *r as usize + l
                             ));
                         } else {
                             return Err(RuntimeError::new("add operator only supported for numbers or strings".into(), call_stack));
@@ -488,15 +494,15 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     match env.stack.pop() {
                         Some(StackSlot::Number(n)) => value = Command::Pushn(n),
                         Some(StackSlot::String(s)) => value = Command::Pushs(s),
-                        Some(StackSlot::Reference(r, _p)) => value = Command::Reference(String::from("@") + r.as_ref()),
+                        Some(StackSlot::Reference(r, offset)) => value = Command::Reference(String::from("@") + r.as_ref(), offset),
                         Some(StackSlot::Code(_)) => return Err(RuntimeError::new("Code on stack unsupported!".into(), call_stack)),
                         None => return Err(RuntimeError::new("stack underflow for arrow expression".into(), call_stack)),
                         _ => return Err(RuntimeError::new("expected value for arrow expression".into(), call_stack))
                     };
 
-                    if let Command::Reference(name) = &env.program[env.idx + 1] {
+                    if let Command::Reference(name, offset) = env.program[env.idx + 1].clone() {
                         if let Ok(pos) = Environment::resolve_reference(&env.definitions, name.split("@").collect::<Vec<&str>>()[1].into()) {
-                            env.program[pos + 1] = value.clone();
+                            env.program[pos + 1 + offset] = value.clone();
                             env.idx += 1;
                         }
                         else {
@@ -507,11 +513,12 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     }
                 },
                 Command::Put => {
-                    if let Some(StackSlot::Reference(_, pos)) = env.stack.pop() {
+                    if let Some(StackSlot::Reference(name, offset)) = env.stack.pop() {
+                        let pos = env.definitions[&name] + offset;
                         match env.stack.pop() {
                             Some(StackSlot::Number(n)) => env.program[pos + 1] = Command::Pushn(n),
                             Some(StackSlot::String(s)) => env.program[pos + 1] = Command::Pushs(s),
-                            Some(StackSlot::Reference(r, _p)) => env.program[pos + 1] = Command::Reference(String::from("@") + r.as_ref()),
+                            Some(StackSlot::Reference(r, offset)) => env.program[pos + 1] = Command::Reference(String::from("@") + r.as_ref(), offset),
                             Some(StackSlot::Code(_)) => {}
                             None => {
                                 return Err(RuntimeError::new("value required for put".into(), call_stack));
@@ -522,7 +529,8 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     }
                 },
                 Command::Get => {
-                    if let Some(StackSlot::Reference(_, pos)) = env.stack.pop() {
+                    if let Some(StackSlot::Reference(name, offset)) = env.stack.pop() {
+                        let pos = env.definitions[&name] + offset;
                             match env.program.get(pos + 1) {
                                 Some(Command::Pushn(n)) => env.stack.push(StackSlot::Number(*n)),
                                 Some(Command::Pushs(s)) => env.stack.push(StackSlot::String(s.clone())),
@@ -545,10 +553,10 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         return Err(RuntimeError::new("expected integer for pull".into(), call_stack));
                     }
                 },
-                Command::Reference(s) => {
+                Command::Reference(s, offset) => {
                     let name: &str = s.split("@").collect::<Vec<&str>>()[1];
                     if env.definitions.contains_key(name) {
-                        env.stack.push(StackSlot::Reference(String::from(name), env.definitions[name]));
+                        env.stack.push(StackSlot::Reference(String::from(name), *offset));
                     } else {
                         return Err(RuntimeError::new(format!("no such symbol: `{}`", name), call_stack));
                     }
@@ -557,7 +565,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     if let StackSlot::String(name) = env.stack.pop().unwrap() {
                         let s: &str = name.as_ref();
                         if env.definitions.contains_key(s) {
-                            env.stack.push(StackSlot::Reference(String::from(s), env.definitions[s]));
+                            env.stack.push(StackSlot::Reference(String::from(s), 0));
                         } else {
                             return Err(RuntimeError::new(format!("no such symbol: `{}`", s), call_stack));
 
@@ -595,19 +603,11 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         return Err(RuntimeError::new("run requires lambda on stack".into(), call_stack));
                     }
                 }
-                Command::Lambda => { /*
-                    let mut lambda_prog: Vec<Command> = Vec::new();
-                    env.idx += 1;
-                    while env.program[env.idx] != Command::End {
-                        lambda_prog.push(env.program[env.idx].clone());
-                        env.idx += 1;
-                    }
-
-                    env.stack.push(StackSlot::Code(lambda_prog));*/
+                Command::Lambda => {
                     let lambda_name = format!("__lambda_{}", lambda_counter);
 
                     env.define_new(lambda_name.clone());
-                    env.stack.push(StackSlot::Reference(String::from(&lambda_name), env.definitions[&lambda_name]));
+                    env.stack.push(StackSlot::Reference(String::from(&lambda_name), 0));
 
                     // the would-be name will be dropped
                     env.stack.push(StackSlot::Number(-1.0));
@@ -754,11 +754,27 @@ fn lexer(program: String) -> Environment {
                     if String::from(s).ends_with("!") {
                         let mut name = String::from(s);
                         name.pop();
-                        commands.push(Command::Reference(name));
+                        let mut jumps = vec![];
+                        while name.ends_with("!") {
+                            name.pop();
+                            jumps.push(Command::Jmp)
+                        }
+                        commands.push(Command::Reference(name, 0));
+                        commands.append(&mut jumps);
                         Command::Jmp
                     } else {
-                        Command::Reference(String::from(s))
+                        Command::Reference(String::from(s), 0)
                     }
+                },
+                s if String::from(s).starts_with("_") => {
+                    let command = String::from(s);
+                    let n = (&command[1..]).parse::<usize>();
+                    if let Ok(v) = n {
+                        for i in 0..v-1 {
+                            commands.push(Command::Return);
+                        }
+                    }
+                    Command::Return
                 },
                 s if s.parse::<f64>().is_ok() =>
                     Command::Pushn(s.parse::<f64>().unwrap()),

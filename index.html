@@ -102,6 +102,51 @@ std {
   prompt is 
     "prompt(\"" swap "\")" + + __jseval
   in
+  dropall is
+    STACK_START -> @std::foreach::guard
+    lambda drop in @std::foreach!
+    "|" -> @std::foreach::guard
+    STACK_START
+  in
+
+  pow is
+    base is _ in
+    exp  is _ in
+    val  is 1 in
+    op   is _ in
+
+    1 -> @val
+    @std::op::* -> @op
+
+    -> @exp
+    -> @base
+
+    (@exp! < 0) lambda
+      @std::op::/ -> @op
+      (@exp! * -1) -> @exp
+    in jump?
+
+    0 @exp! @std::range! 
+    lambda
+      drop
+      @val! @base! @op! jump -> @val
+    in @std::foreach!
+
+    @val!
+  in
+}
+
+lists {
+  len is
+    idx is -1 in
+    loop {
+      @idx! pull "|" != lambda
+        @idx @std::dec!
+        @loop!
+      in jump?
+    } @loop!
+    @idx! 1 + -1 *
+  in
   fold is 
     guard is "|" in
     func is _ in
@@ -169,44 +214,14 @@ std {
     drop
     @accu!
   in
-  droplist is
-    lambda drop in @std::foreach!
-  in
-  dropall is
-    STACK_START -> @std::foreach::guard
-    lambda drop in @std::foreach!
-    "|" -> @std::foreach::guard
-    STACK_START
+  "drop" is
+    lambda drop in @lists::foreach!
   in
   string is 
-    \space @std::join!
-  in
-  pow is
-    base is _ in
-    exp  is _ in
-    val  is 1 in
-    op   is _ in
-
-    1 -> @val
-    @std::op::* -> @op
-
-    -> @exp
-    -> @base
-
-    (@exp! < 0) lambda
-      @std::op::/ -> @op
-      (@exp! * -1) -> @exp
-    in jump?
-
-    0 @exp! @std::range! 
-    lambda
-      drop
-      @val! @base! @op! jump -> @val
-    in @std::foreach!
-
-    @val!
+    \space @lists::join!
   in
 }
+
 </script>
 
 

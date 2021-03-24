@@ -51,6 +51,7 @@ pub enum Command {
     Sub,
     Mul,
     Div,
+    Mod,
     GT,
     GE,
     LT,
@@ -363,6 +364,17 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                         return Err(RuntimeError::new("stack underflow while dividing!".into(), call_stack));
                     }
                 },
+                Command::Mod => {
+                    if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
+                        if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
+                            env.stack.push(StackSlot::Number(l % r));
+                        } else {
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), call_stack));
+                        }
+                    } else {
+                        return Err(RuntimeError::new("stack underflow in modulo operation!".into(), call_stack));
+                    }
+                },
                 Command::LT => {
                     if let (Some(right), Some(left)) = (env.stack.pop(), env.stack.pop()) {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
@@ -553,7 +565,7 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     }
                 },
                 Command::Reference(s, offset) => {
-                    let name: &str = s.split("@").collect::<Vec<&str>>()[1];
+                    let name: &str = &s[1..];
                     if env.definitions.contains_key(name) {
                         env.stack.push(StackSlot::Reference(String::from(name), *offset));
                     } else {
@@ -640,11 +652,12 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
 fn lexer(program: String) -> Environment {
     let mut commands: Vec<Command> = Vec::new();
     let mut idx = 0;
-    let comment = Regex::new(r"/\*.*\*/").unwrap();
+    let comment = Regex::new(r"(?m)//.*$").unwrap();
 
     let mut preprocessed = program;
     preprocessed = preprocessed.replace("(", " ( ");
     preprocessed = preprocessed.replace(")", " ) ");
+    preprocessed = preprocessed.replace("$", " get ");
     preprocessed = comment.replace_all(preprocessed.as_ref(), "").to_string();
 
     let prog: Vec<&str> = preprocessed
@@ -716,6 +729,8 @@ fn lexer(program: String) -> Environment {
                     Command::Mul,
                 "/" =>
                     Command::Div,
+                "%" =>
+                    Command::Mod,
                 "<" =>
                     Command::LT,
                 "<=" =>
@@ -751,21 +766,16 @@ fn lexer(program: String) -> Environment {
                         .replace("\\\"", "\"")
                         .replace("\\n", "\n"))
                 },
-                s if String::from(s).starts_with("@") => {
-                    if String::from(s).ends_with("!") {
-                        let mut name = String::from(s);
-                        name.pop();
-                        let mut jumps = vec![];
-                        while name.ends_with("!") {
-                            name.pop();
-                            jumps.push(Command::Jmp)
-                        }
-                        commands.push(Command::Reference(name, 0));
-                        commands.append(&mut jumps);
-                        Command::Jmp
-                    } else {
-                        Command::Reference(String::from(s), 0)
+                s if s.chars().nth(0).unwrap() == '@' => {
+                    let mut last_idx = s.len();
+                    let mut jumps = vec![];
+                    while s[0..last_idx].ends_with("!") {
+                        last_idx -= 1;
+                        jumps.push(Command::Jmp);
                     }
+                    commands.push(Command::Reference(String::from(&s[0..last_idx]), 0));
+                    commands.append(&mut jumps);
+                    Command::Nop
                 },
                 s if String::from(s).starts_with("_") => {
                     let command = String::from(s);
@@ -789,7 +799,10 @@ fn lexer(program: String) -> Environment {
                 s =>
                     Command::Pushs(String::from(s))
             };
-        commands.push(next);
+        match next {
+            Command::Nop => {},
+             n => commands.push(n)
+        }
         idx += 1;
     }
 

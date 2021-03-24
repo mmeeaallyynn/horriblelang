@@ -40,7 +40,7 @@ in
 "a number:" @std::prompt! -> @fibonacci::counter
 "result: " @fibonacci! + @std::alert!
 
-1 10 @std::range! @std::op::+ 0 @std::fold!
+1 10 @lists::range! @std::op::+ 0 @lists::fold!
 </textarea>
 <div id="stackinfo" style="position: relative; float: left">
 </div>
@@ -50,10 +50,10 @@ in
 <div id="result"></div>
 
 <script type="text/notherlang">
-/* place a guard at the beginning of the stack to detect possible underflow errors */
+// place a guard at the beginning of the stack to detect possible underflow errors
 STACK_START
 
-/* toplevel drop that doesn't remove the stack guard" */
+// toplevel drop that doesn't remove the stack guard
 "drop" is
   dup STACK_START != lambda
     drop

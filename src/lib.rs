@@ -107,6 +107,7 @@ struct Environment {
     stack: Stack,
     definitions: HashMap<String, usize>,
     program: Vec<Command>,
+    lambda_counter: usize,
     idx: usize
 }
 
@@ -117,6 +118,7 @@ impl Environment {
             stack: Stack { stack: Vec::new() },
             definitions: HashMap::new(),
             program: program,
+            lambda_counter: 0,
             idx: 0
         }
     }
@@ -127,6 +129,7 @@ impl Environment {
             stack: from.stack,
             definitions: from.definitions,
             program: from.program,
+            lambda_counter: from.lambda_counter,
             idx: from.idx
         }
     }
@@ -184,10 +187,9 @@ impl fmt::Display for Stack {
     }
 }
 
-fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
+fn run(env: &mut Environment) -> Result<Environment, RuntimeError> {
     let mut execute = true;
     let mut level = 0;
-    let mut lambda_counter = 0;
 
     let mut call_stack: Vec<(usize, String)> = Vec::new();
 
@@ -615,14 +617,14 @@ fn run(mut env: &mut Environment) -> Result<Environment, RuntimeError> {
                     }
                 }
                 Command::Lambda => {
-                    let lambda_name = format!("__lambda_{}", lambda_counter);
+                    let lambda_name = format!("__lambda_{}", env.lambda_counter);
 
                     env.define_new(lambda_name.clone());
                     env.stack.push(StackSlot::Reference(String::from(&lambda_name), 0));
 
                     // the would-be name will be dropped
                     env.stack.push(StackSlot::Number(-1.0));
-                    lambda_counter += 1;
+                    env.lambda_counter += 1;
                     execute = false;
                 }
                 Command::End => {
@@ -777,9 +779,8 @@ fn lexer(program: String) -> Environment {
                     commands.append(&mut jumps);
                     Command::Nop
                 },
-                s if String::from(s).starts_with("_") => {
-                    let command = String::from(s);
-                    let n = (&command[1..]).parse::<usize>();
+                s if s.chars().nth(0).unwrap() == '_' => {
+                    let n = (&s[1..]).parse::<usize>();
                     if let Ok(v) = n {
                         for i in 0..v-1 {
                             commands.push(Command::Return);

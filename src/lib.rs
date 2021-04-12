@@ -817,13 +817,18 @@ fn main() {
 #[wasm_bindgen]
 pub fn run_string(input: &str) -> String {
     format!("{}", {
-        let idx = ENV.lock().unwrap().program.len();
-        ENV.lock().unwrap().program.append(&mut lexer(input.to_string()).program);
-        ENV.lock().unwrap().idx = idx;
-        match run(&mut ENV.lock().unwrap()) {
+        let mut env = ENV.lock().unwrap();
+        let idx = env.program.len();
+        env.program.append(&mut lexer(input.to_string()).program);
+        env.idx = idx;
+        match run(&mut env) {
             Ok(env) => env.stack,
             Err(msg) => {
-                error(&format!("Notherlang Error:\n{}", msg));
+                error(&format!(
+                    "Notherlang Error:\nat: {:#?}\nstack: {:#?}\n{}", 
+                    &env.program[usize::max(0, env.idx - 1)..usize::min(env.program.len() - 1, env.idx + 2)],
+                    env.stack.stack,
+                    msg));
                 Stack { stack: vec![] }
             }
         }

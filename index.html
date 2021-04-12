@@ -13,34 +13,24 @@
 <div id="lines" rows="40" cols="2" style="padding-top: 3px; background: #FFF; color: #000; font-size: 12pt; position: relative; float: left; overflow: hidden">
 </div>
 <textarea rows="2000" cols="80" id="text" style="background: #FFF; color: #000; font-size: 12pt; position: relative; float: left">
-fibonacci is
-  counter is _ in
 
+fibonacci is
   a is 0 in
   b is 1 in
-  result is 0 in
-
-  loop {
-    (@a! + @b!) -> @result
-
-    @b! -> @a
-    @result! -> @b
-
-    @counter @std::dec!
-
-    (@counter! > 0) then {
-      @loop!
-    } @std::if!
-  } @loop!
-
-  @result!
+  0 swap @lists::range!
+  lambda
+    drop
+    @b!
+    (@a! + @b!)
+    -> @b
+    -> @a
+  in @lists::foreach!
+  @b!
 in
 
 
-"a number:" @std::prompt! -> @fibonacci::counter
-"result: " @fibonacci! + @std::alert!
-
-1 10 @lists::range! @std::op::+ 0 @lists::fold!
+"a number:" @std::prompt! @fibonacci!
+"result: " swap + @std::alert!
 </textarea>
 <div id="stackinfo" style="position: relative; float: left">
 </div>

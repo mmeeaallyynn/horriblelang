@@ -89,6 +89,16 @@ std {
   if is
     @then jump?
   in
+  ifelse is
+    iftrue is _ in
+    iffalse is _ in
+
+    -> @iffalse
+    -> @iftrue
+
+    @iffalse$ swap lambda drop @iftrue! in jump? jump
+  in
+
   endl is
     "\n" print
   in

@@ -1,4 +1,5 @@
 #![feature(or_patterns)]
+#![feature(iter_map_while)]
 
 mod arithparser;
 
@@ -68,10 +69,7 @@ pub enum Command {
     Get,
     ArrowPut,
     AddressOf,
-    SubProg,
     Lambda,
-    End,
-    Run,
     Return,
     Pull,
 
@@ -86,8 +84,7 @@ pub enum Command {
 pub enum StackSlot {
     Number(f64),
     String(String),
-    Reference(String, usize),
-    Code(Vec<Command>)
+    Reference(String, usize)
 }
 
 #[derive(Clone, Debug)]
@@ -497,7 +494,6 @@ fn run(env: &mut Environment) -> Result<Environment, RuntimeError> {
                             StackSlot::Number(n) => log(&format!("{}", n)),
                             StackSlot::String(s) => log(&format!("{}", s.replace("\\n", "\n"))),
                             StackSlot::Reference(r, p) => log(&format!("{} -> {}", r, p)),
-                            StackSlot::Code(_) => {}
                         },
                         None => println!("Stack underflow!")
                     };
@@ -508,9 +504,7 @@ fn run(env: &mut Environment) -> Result<Environment, RuntimeError> {
                         Some(StackSlot::Number(n)) => value = Command::Pushn(n),
                         Some(StackSlot::String(s)) => value = Command::Pushs(s),
                         Some(StackSlot::Reference(r, offset)) => value = Command::Reference(String::from("@") + r.as_ref(), offset),
-                        Some(StackSlot::Code(_)) => return Err(RuntimeError::new("Code on stack unsupported!".into(), call_stack)),
-                        None => return Err(RuntimeError::new("stack underflow for arrow expression".into(), call_stack)),
-                        _ => return Err(RuntimeError::new("expected value for arrow expression".into(), call_stack))
+                        None => return Err(RuntimeError::new("stack underflow for arrow expression".into(), call_stack))
                     };
 
                     if let Command::Reference(name, offset) = env.program[env.idx + 1].clone() {
@@ -532,7 +526,6 @@ fn run(env: &mut Environment) -> Result<Environment, RuntimeError> {
                             Some(StackSlot::Number(n)) => env.program[pos + 1] = Command::Pushn(n),
                             Some(StackSlot::String(s)) => env.program[pos + 1] = Command::Pushs(s),
                             Some(StackSlot::Reference(r, offset)) => env.program[pos + 1] = Command::Reference(String::from("@") + r.as_ref(), offset),
-                            Some(StackSlot::Code(_)) => {}
                             None => {
                                 return Err(RuntimeError::new("value required for put".into(), call_stack));
                             }
@@ -547,6 +540,7 @@ fn run(env: &mut Environment) -> Result<Environment, RuntimeError> {
                             match env.program.get(pos + 1) {
                                 Some(Command::Pushn(n)) => env.stack.push(StackSlot::Number(*n)),
                                 Some(Command::Pushs(s)) => env.stack.push(StackSlot::String(s.clone())),
+                                Some(Command::Reference(s, offset)) => env.stack.push(StackSlot::Reference(String::from(&s[1..]), *offset)),
                                 _ => return Err(RuntimeError::new("value required for get".into(), call_stack))
                             }
                     } else {
@@ -587,35 +581,6 @@ fn run(env: &mut Environment) -> Result<Environment, RuntimeError> {
                         return Err(RuntimeError::new("string required".into(), call_stack));
                     }
                 },
-                Command::SubProg => {
-                    let mut sub_env = Environment::new(env.program.clone());
-                    sub_env.idx = env.idx + 1;
-                    sub_env.prefix = env.prefix.clone();
-                    sub_env.definitions = env.definitions.clone();
-
-                    match run(&mut sub_env) {
-                        Ok(result) => {
-                            env.idx = result.idx;
-                            if let Some(stack_slot) = result.stack.stack.last() {
-                                env.stack.push(stack_slot.clone());
-                            }
-                        },
-                        Err(err) =>
-                            println!("error in sub: {}", err)
-                    }
-                },
-                Command::Run => {
-                    if let StackSlot::Code(prog) = env.stack.pop().unwrap() {
-                        match run(&mut Environment::new(prog)) {
-                            Ok(new_env) => for item in new_env.stack.stack {
-                                env.stack.push(item);
-                            },
-                            Err(e) => return Err(RuntimeError::new(format!("lambda error: {}", e), call_stack))
-                        }
-                    } else {
-                        return Err(RuntimeError::new("run requires lambda on stack".into(), call_stack));
-                    }
-                }
                 Command::Lambda => {
                     let lambda_name = format!("__lambda_{}", env.lambda_counter);
 
@@ -626,9 +591,6 @@ fn run(env: &mut Environment) -> Result<Environment, RuntimeError> {
                     env.stack.push(StackSlot::Number(-1.0));
                     env.lambda_counter += 1;
                     execute = false;
-                }
-                Command::End => {
-                    break;
                 }
                 Command::PrintStack => println!("{:?}", env.stack.stack),
                 Command::JSEval => if let StackSlot::String(s) = env.stack.pop().unwrap() {
@@ -659,7 +621,7 @@ fn lexer(program: String) -> Environment {
     let mut preprocessed = program;
     preprocessed = preprocessed.replace("(", " ( ");
     preprocessed = preprocessed.replace(")", " ) ");
-    preprocessed = preprocessed.replace("$", " get ");
+//    preprocessed = preprocessed.replace("$", " get ");
     preprocessed = comment.replace_all(preprocessed.as_ref(), "").to_string();
 
     let prog: Vec<&str> = preprocessed
@@ -669,12 +631,6 @@ fn lexer(program: String) -> Environment {
     while idx < prog.len() {
         let next: Command =
             match prog[idx].as_ref() {
-                ";" =>
-                    Command::Nop,
-                "[" =>
-                    Command::Nop,
-                "]" =>
-                    Command::Nop,
                 "include" =>
                     Command::Include,
                 "STACK" =>
@@ -686,8 +642,6 @@ fn lexer(program: String) -> Environment {
                 "}" =>
                     Command::EndDefine,
                 "is" =>
-                    Command::Define(Visibility::Public),
-                "=" =>
                     Command::Define(Visibility::Public),
                 "priv" =>
                     Command::Define(Visibility::Private),
@@ -715,14 +669,8 @@ fn lexer(program: String) -> Environment {
                     Command::Pull,
                 "->" =>
                     Command::ArrowPut,
-                "sub" =>
-                    Command::SubProg,
                 "lambda" =>
                     Command::Lambda,
-                "run" =>
-                    Command::Run,
-                "end" =>
-                    Command::End,
                 "+" =>
                     Command::Add,
                 "-" =>
@@ -769,20 +717,22 @@ fn lexer(program: String) -> Environment {
                         .replace("\\n", "\n"))
                 },
                 s if s.chars().nth(0).unwrap() == '@' => {
-                    let mut last_idx = s.len();
-                    let mut jumps = vec![];
-                    while s[0..last_idx].ends_with("!") {
-                        last_idx -= 1;
-                        jumps.push(Command::Jmp);
-                    }
-                    commands.push(Command::Reference(String::from(&s[0..last_idx]), 0));
-                    commands.append(&mut jumps);
+                    let jumps: Vec<Command> = s.chars().rev()
+                        .map_while(|c| match c {
+                            '$' => Some(Command::Get),
+                            '!' => Some(Command::Jmp),
+                            '?' => Some(Command::JmpIf),
+                            _ => None
+                        }).collect();
+
+                    commands.push(Command::Reference(String::from(&s[0..s.len() - jumps.len()]), 0));
+                    commands.append(&mut jumps.into_iter().rev().collect());
                     Command::Nop
                 },
                 s if s.chars().nth(0).unwrap() == '_' => {
                     let n = (&s[1..]).parse::<usize>();
                     if let Ok(v) = n {
-                        for i in 0..v-1 {
+                        for _i in 0..v-1 {
                             commands.push(Command::Return);
                         }
                     }
@@ -808,10 +758,6 @@ fn lexer(program: String) -> Environment {
     }
 
     Environment::new(commands)
-}
-
-fn main() {
-    println!("nothing here!")
 }
 
 #[wasm_bindgen]

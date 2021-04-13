@@ -20,14 +20,12 @@ fibonacci is
   0 swap @lists::range!
   lambda
     drop
-    @b!
-    (@a! + @b!)
-    -> @b
+    @b$
+    (@a$ + @b$) -> @b
     -> @a
   in @lists::foreach!
-  @b!
+  @b$
 in
-
 
 "a number:" @std::prompt! @fibonacci!
 "result: " swap + @std::alert!

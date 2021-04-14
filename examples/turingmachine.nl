@@ -1,0 +1,51 @@
+
+turingmachine is 
+  tape is 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 in
+  tape_idx is 0 in
+
+  read is @turingmachine::tape @turingmachine::tape_idx$ + get in
+  write is @turingmachine::tape @turingmachine::tape_idx$ + put in
+  left is @turingmachine::tape_idx @std::dec! in
+  right is @turingmachine::tape_idx @std::inc! in
+  stop is 1 -> @turingmachine::done in
+  done is 0 in
+
+  step is 1 in
+
+  next is
+    @turingmachine::read! +
+    addr jump
+
+    @turingmachine::write!
+    addr jump
+    @turingmachine::step @std::inc!
+
+    @turingmachine::done$ not @turingmachine::next?
+  in
+in
+
+copyrules is 
+  s11 is s2 right 0 in
+  s10 is halt stop  0 in
+
+  s21 is s2 right 1 in
+  s20 is s3 right 0 in
+
+  s31 is s3 right 1 in
+  s30 is s4 left  1 in
+
+  s41 is s4 left  1 in
+  s40 is s5 left  0 in
+
+  s51 is s5 left  1 in
+  s50 is s1 right 1 in
+
+  // load 
+  @turingmachine!
+  // initial state
+  s1 
+in
+
+@copyrules!
+@turingmachine::next!
+| @turingmachine::tape! "" @lists::join!

@@ -238,5 +238,51 @@ lists {
   string is 
     \space @lists::join!
   in
+
+  find is
+    best is _ in
+    space is _ in
+    op is _ in
+    -> @lists::find::op
+    -> @lists::find::best
+
+    lambda 
+      dup -> @lists::find::space
+
+      @lists::find::best$ @op$! lambda 
+        @lists::find::space$ -> @lists::find::best
+      in jump?
+    in @lists::foreach!
+
+    @lists::find::best$
+  in
+
+  max is
+    lambda > in @lists::find!
+  in
+
+  min is
+    lambda < in @lists::find!
+  in
+
+  "dup" is 
+    len is _ in
+    idx is -1 in
+    -1 -> @idx
+    @lists::len! -1 * 1 - -> @lists::dup::len
+    | 
+    loop {
+      @lists::dup::len$ pull
+      @lists::dup::idx$ 1 - @lists::dup::len$ > lambda
+        @lists::dup::idx @std::dec!
+        @loop!
+      in jump?
+    } @loop!
+  in
+
+  minmax is
+    max is _ in
+    @lists::dup! @lists::max! -> @max @lists::min! @lists::minmax::max$
+  in
 }
 

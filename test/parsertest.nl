@@ -1,0 +1,105 @@
+"std.nl" include
+
+
+local is
+  stack is _100 in
+  stack-idx is -1 in
+
+  enter is
+    @local::stack-idx @std::inc!
+    dup @local::stack @local::stack-idx$ + put
+    dup 2 + @std::inc!
+    jump
+  in
+  exit is
+    @local::stack @local::stack-idx$ + get 2 + @std::dec! 
+    @local::stack-idx @std::dec!
+  in
+  access is @local::stack @local::stack-idx$ + get 2 + get + in
+  "get" is @local::access! get in
+  "put" is @local::access! put in
+in
+
+program is _100 in
+prog-idx is 0 in
+
+setup is 
+  32 swap __bytes
+in
+
+is-digit is
+  dup dup 48 >= swap 57 <= *
+in
+
+parse-number is
+  delimiter is | in
+  value is 0 in
+  digit is 1 in
+  0 -> @value
+  1 -> @digit
+
+  @delimiter$ -> @lists::guard
+
+  lambda
+    48 - @digit$ * @value$ + -> @value
+    @digit$ 10 * -> @digit
+  in @lists::foreach!
+  | -> @lists::guard
+
+  @value$
+in
+
+parse-operator is
+  op is _ in
+  std::op:: swap + addr -> @op
+  @op$
+in
+
+skip-whitespace is
+  loop {
+    dup dup 32 == swap 10 == + lambda 
+      drop @loop!
+    in jump?
+  } @loop!
+in
+
+parse-operation is
+  calls is -1 in
+  test-digit is _10 in
+  operator-stack is _10 in
+
+  0 @test-digit @local::put!
+  
+  32 -> @parse-number::delimiter
+
+  @skip-whitespace!
+  @is-digit! dup @test-digit @local::put!
+
+  lambda
+    @parse-number! @program @prog-idx$ + put
+    @prog-idx$ 1 + -> @prog-idx
+  in jump?
+
+  @test-digit @local::get! not lambda
+    @skip-whitespace!
+
+    @parse-operator! @operator-stack @local::put!
+    @skip-whitespace!
+
+    @parse-operation @local::enter!
+    @skip-whitespace!
+
+    @parse-operation @local::enter!
+    @skip-whitespace!
+
+    @operator-stack @local::get! @program @prog-idx$ + put
+    @prog-idx$ 1 + -> @prog-idx
+  in jump?
+
+  @local::exit!
+in
+
+parse is
+  @setup! @parse-operation @local::enter!
+in
+

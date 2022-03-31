@@ -1,0 +1,146 @@
+<html>
+<head>
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+<style>
+* {
+  color: #BBB !important;
+  background-color: #333 !important;;
+}
+</style>
+</head>
+<body>
+<div id=stuff style="position: relative; overflow: hidden; resize: both">
+<div id="lines" rows="40" cols="2" style="padding-top: 3px; background: #FFF; color: #000; font-size: 12pt; position: relative; float: left; overflow: hidden">
+</div>
+<textarea contenteditable="true" rows="2000" cols="80" id="text" style="background: #FFF; color: #000; font-size: 12pt; position: relative; float: left">
+
+fibonacci is
+  a is 0 in
+  b is 1 in
+  0 swap @lists::range!
+  lambda
+    drop
+    @b$
+    (@a$ + @b$) -> @b
+    -> @a
+  in @lists::foreach!
+  @b$
+in
+
+"a number:" @std::prompt! @fibonacci!
+"result: " swap + @std::alert!
+</textarea>
+<div id="stackinfo" style="position: relative; float: left">
+</div>
+</div>
+<button id="ok">OK</button>
+
+<div id="result"></div>
+
+<script type="text/notherlang" src="std.nl"></script>
+
+<script type="text/javascript" src="pkg/notherlang.js"></script>
+<script type="module">
+const { produce, run_string } = wasm_bindgen;
+async function run() {
+    let prog = "";
+
+    for(let tag of document.getElementsByTagName("script")) {
+	    if(tag.type == "text/notherlang") {
+            if(tag.src != "") {
+                await fetch(tag.src)
+                    .then((res) => res.text())
+                    .then((src) => prog += src);
+            }
+            else {
+    		    prog += tag.innerHTML;
+            }
+	    }
+    }
+
+    await wasm_bindgen("./pkg/notherlang_bg.wasm");
+
+    let text = document.getElementById("text");
+    let container = document.getElementById("stuff");
+
+    text.onresize = (event) => {
+        lines.style.height = text.clientHeight;
+    }
+
+    document.getElementById("text").onkeydown = (event) => {
+        // shift+enter to execute contents
+        if (event.key == "Enter" && event.shiftKey == true) {
+            event.preventDefault();
+            console.log(text.innerText);
+            document.getElementById("stackinfo").innerHTML = run_string(
+                text.value
+            );
+        }
+        // expected behaviour for tab and shift+tab
+        else if (event.key == "Tab") {
+            let lines = text.textContent.split("\n");
+
+            let selectionStart = text.selectionStart;
+            let selectionEnd = text.selectionEnd;
+
+            let lineNumberStart = text.textContent.slice(0, selectionStart).split("\n").length
+            let lineNumberEnd = text.textContent.slice(0, selectionEnd).split("\n").length
+
+            let multipleLinesSelected = (lineNumberStart != lineNumberEnd);
+            let beginningOfLine = ["\n", undefined].includes(text.textContent[selectionStart - 1]);
+
+            if (!multipleLinesSelected) {
+                console.log("single line");
+                if (event.shiftKey) {
+                    if (lines[lineNumberStart - 1].startsWith("  ")) {
+                        lines[lineNumberStart - 1] = lines[lineNumberStart - 1].slice(2);
+                        console.log("beginning of line: ", beginningOfLine, selectionStart);
+                        text.textContent = lines.join("\n");
+                        text.selectionStart = selectionStart - (beginningOfLine ? 0: 2);
+                        text.selectionEnd =  selectionEnd - (beginningOfLine ? 0: 2);
+                    }
+                }
+                else {
+                    text.textContent = text.textContent.slice(0, selectionStart) + "  " + text.textContent.slice(selectionEnd);
+                    text.selectionStart = selectionStart + 2;
+                    text.selectionEnd = selectionEnd + 2;
+                }
+            }
+            else {
+                console.log("multiple lines");
+                for (let lineNumber = lineNumberStart; lineNumber < lineNumberEnd; lineNumber++) {
+                    if (event.shiftKey) {
+                        if (lines[lineNumber - 1].startsWith("  ")) {
+                            lines[lineNumber - 1] = lines[lineNumber - 1].slice(2);
+                       }
+                    }
+                    else {
+                        lines[lineNumber - 1] = "  " + lines[lineNumber - 1];
+                    }
+                }
+                text.textContent = lines.join("\n");
+                if (event.shiftKey) {
+                    text.selectionStart = selectionStart - (beginningOfLine ? 0: 2);
+                    text.selectionEnd = selectionEnd - (beginningOfLine ? 0: 2 * (lineNumberEnd - lineNumberStart));
+                }
+                else {
+                    text.selectionStart = selectionStart + 2;
+                    text.selectionEnd = selectionEnd + 2 * (lineNumberEnd - lineNumberStart);
+                }
+            }
+            event.preventDefault();
+        }
+    };
+
+    document.getElementById("result").innerHTML = run_string(prog);
+
+    document.getElementById("ok").onclick = () => {
+        document.getElementById("result").innerHTML = run_string(
+            document.getElementById("text").value
+        );
+    }
+}
+run();
+</script>
+</body>
+</html>

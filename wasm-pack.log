@@ -1,0 +1,142 @@
+Jun 01 19:05:28.199 ERRO Compilation of your program failed. stderr:
+
+    Updating crates.io index
+   Compiling proc-macro2 v0.4.30
+   Compiling unicode-xid v0.1.0
+   Compiling syn v0.15.34
+   Compiling wasm-bindgen-shared v0.2.45
+   Compiling cfg-if v0.1.9
+   Compiling bumpalo v2.4.3
+   Compiling memchr v2.2.0
+   Compiling lazy_static v1.2.0
+   Compiling ucd-util v0.1.3
+   Compiling regex v1.1.0
+   Compiling wasm-bindgen v0.2.45
+   Compiling utf8-ranges v1.0.2
+   Compiling log v0.4.6
+   Compiling regex-syntax v0.6.5
+   Compiling thread_local v0.3.6
+   Compiling aho-corasick v0.6.10
+   Compiling quote v0.6.12
+   Compiling wasm-bindgen-backend v0.2.45
+   Compiling wasm-bindgen-macro-support v0.2.45
+   Compiling wasm-bindgen-macro v0.2.45
+   Compiling notherlang v0.1.0 (/media/hdd/Documents/rust/notherlang)
+warning: unused import: `std::env`
+ --> src/lib.rs:6:5
+  |
+6 | use std::env;
+  |     ^^^^^^^^
+  |
+  = note: #[warn(unused_imports)] on by default
+
+warning: unused import: `std::io`
+ --> src/lib.rs:9:5
+  |
+9 | use std::io;
+  |     ^^^^^^^
+
+error[E0308]: mismatched types
+  --> src/lib.rs:19:31
+   |
+19 | pub fn produce(name: &str) -> String {
+   |        -------                ^^^^^^ expected struct `std::string::String`, found ()
+   |        |
+   |        this function's body doesn't return
+20 |     format!("hello, {}", name);
+   |                               - help: consider removing this semicolon
+   |
+   = note: expected type `std::string::String`
+              found type `()`
+
+error: aborting due to previous error
+
+For more information about this error, try `rustc --explain E0308`.
+error: Could not compile `notherlang`.
+
+To learn more, run the command again with --verbose.
+
+Jun 02 13:40:10.679 ERRO Compilation of your program failed. stderr:
+
+   Compiling notherlang v0.1.0 (/media/hdd/Documents/rust/notherlang)
+error: unknown start of token: \
+   --> src/lib.rs:380:56
+    |
+380 |                             StackSlot::String(s) => print!("{}", s.replace("\\n", "\n")),
+    |                                                                             ^
+
+error: aborting due to previous error
+
+error: Could not compile `notherlang`.
+
+To learn more, run the command again with --verbose.
+
+Jun 02 13:40:22.497 ERRO Compilation of your program failed. stderr:
+
+   Compiling notherlang v0.1.0 (/media/hdd/Documents/rust/notherlang)
+error: unknown start of token: \
+   --> src/lib.rs:380:56
+    |
+380 |                             StackSlot::String(s) => print!("{}", s.replace("\\n", "\n")),
+    |                                                                             ^
+
+error: aborting due to previous error
+
+error: Could not compile `notherlang`.
+
+To learn more, run the command again with --verbose.
+
+Jun 24 13:06:48.462 ERRO Compilation of your program failed. stderr:
+
+   Compiling notherlang v0.1.0 (/media/hdd/Documents/rust/notherlang)
+warning: unused import: `std::env`
+ --> src/lib.rs:6:5
+  |
+6 | use std::env;
+  |     ^^^^^^^^
+  |
+  = note: #[warn(unused_imports)] on by default
+
+warning: unused import: `regex::*`
+ --> src/lib.rs:8:5
+  |
+8 | use regex::*;
+  |     ^^^^^^^^
+
+error[E0308]: mismatched types
+   --> src/lib.rs:382:36
+    |
+382 |                             StackSlot::Number(n) => log(format!("{}", n)),
+    |                                                         ^^^^^^^^^^^^^^^^ expected &str, found struct `std::string::String`
+    |
+    = note: expected type `&str`
+               found type `std::string::String`
+    = note: this error originates in a macro outside of the current crate (in Nightly builds, run with -Z external-macro-backtrace for more info)
+
+error[E0308]: mismatched types
+   --> src/lib.rs:383:36
+    |
+383 |                             StackSlot::String(s) => log(format!("{}", s.replace("\\n", "\n"))),
+    |                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected &str, found struct `std::string::String`
+    |
+    = note: expected type `&str`
+               found type `std::string::String`
+    = note: this error originates in a macro outside of the current crate (in Nightly builds, run with -Z external-macro-backtrace for more info)
+
+error[E0308]: mismatched types
+   --> src/lib.rs:384:42
+    |
+384 |                             StackSlot::Reference(r, p) => log(format!("{} -> {}", r, p)),
+    |                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^ expected &str, found struct `std::string::String`
+    |
+    = note: expected type `&str`
+               found type `std::string::String`
+    = note: this error originates in a macro outside of the current crate (in Nightly builds, run with -Z external-macro-backtrace for more info)
+
+error: aborting due to 3 previous errors
+
+For more information about this error, try `rustc --explain E0308`.
+error: Could not compile `notherlang`.
+
+To learn more, run the command again with --verbose.
+

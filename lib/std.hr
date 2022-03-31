@@ -105,7 +105,7 @@ std {
   in
 }
 
-"generator.nl" include
-"lists.nl" include
-"memory.nl" include
+"generator.hr" include
+"lists.hr" include
+"memory.hr" include
 

@@ -127,6 +127,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "horrible"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "regex",
+ "rustyline",
+ "rustyline-derive",
+]
+
+[[package]]
 name = "io-lifetimes"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -194,16 +204,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "memoffset",
-]
-
-[[package]]
-name = "notherlang"
-version = "0.1.0"
-dependencies = [
- "lazy_static",
- "regex",
- "rustyline",
- "rustyline-derive",
 ]
 
 [[package]]

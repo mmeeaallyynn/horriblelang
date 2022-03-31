@@ -6,11 +6,11 @@ use rustyline::Editor;
 
 
 fn main() {
-    let mut env = notherlang::Environment::new(vec![], vec![]);
+    let mut env = horrible::Environment::new(vec![], vec![]);
     let args: Vec<String> = env::args().collect();
 
     let arg_string = args.iter().map(|i| { format!("\"{}\"", i) }).collect::<Vec<String>>().join(" ");
-    notherlang::run_string(&mut env, &format!("| {}", arg_string))
+    horrible::run_string(&mut env, &format!("| {}", arg_string))
         .expect("unable to parse arguments");
 
     let mut rl = Editor::<()>::new();
@@ -25,7 +25,7 @@ fn main() {
         let contents = fs::read_to_string(filename)
             .expect("Something went wrong reading the file");
 
-        match notherlang::run_string(&mut env, &contents) {
+        match horrible::run_string(&mut env, &contents) {
             Ok(_env) => {},
             Err(err) => println!("{}", err),
         };
@@ -43,7 +43,7 @@ fn main() {
             match readline {
                 Ok(line) => {
                     rl.add_history_entry(line.as_str());
-                    match notherlang::run_string(&mut env, &line) {
+                    match horrible::run_string(&mut env, &line) {
                         Ok(_env) => {},
                         Err(err) => println!("{}", err),
                     };

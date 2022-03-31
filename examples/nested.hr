@@ -13,4 +13,4 @@ main is
 	@a! @b! +
 in
 
-@main! @std.println!
+@main! @std::println!

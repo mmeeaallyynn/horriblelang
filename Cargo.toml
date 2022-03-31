@@ -1,17 +1,16 @@
 [package]
-name = "notherlang"
+name = "horrible"
 version = "0.1.0"
 authors = ["mdmn99 <merlin.mengel@mni.thm.de>"]
 edition = "2018"
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
 regex = "1"
-wasm-bindgen = "0.2"
 lazy_static = "1.4.0"
+rustyline = "9.1.2"
+rustyline-derive = "0.6.0"
 
 [profile.release]
-opt-level = 3
-lto = true
+#opt-level = 3
+#lto = true
+debug = true

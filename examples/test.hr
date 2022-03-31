@@ -37,10 +37,10 @@ in
 @main!
 
 "meow:\n" print
-@main.a! print
+@main::a! print
 
-@std.endl!
-@std.endl!
+@std::endl!
+@std::endl!
 
 fn is
 	"hello world!\n" print
@@ -54,34 +54,34 @@ iftrue {
 }
 else {
 	"false\n" print
-} @std.if!
+} @std::if!
 
 /* test boolean */
 "Should be 0: " print
-0 print @std.endl!
+0 print @std::endl!
 
 "Should be 1: " print
-0 not print @std.endl!
+0 not print @std::endl!
 
-"Should be 5. " print
-5 print @std.endl!
+"Should be 5: " print
+5 print @std::endl!
 
 "Should be 0: " print
-5 not print @std.endl!
+5 not print @std::endl!
 
 
-2 3 - print @std.endl!
+2 3 - print @std::endl!
 
 
 /* Put Test */
 a is 6 in
 b is 100 in
 
-@a! print @std.endl!
-@b! print @std.endl!
+@a! print @std::endl!
+@b! print @std::endl!
 
 
 5 @a put
-@a! print @std.endl!
-@b! print @std.endl!
+@a! print @std::endl!
+@b! print @std::endl!
 STACK

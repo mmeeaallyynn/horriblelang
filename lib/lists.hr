@@ -1,0 +1,148 @@
+
+lists {
+  guard is | in
+
+  len is
+    idx is -1 in
+    -1 -> @idx
+    loop {
+      @idx! pull @::guard! != lambda
+        @idx @std::dec!
+        @loop!
+      in jump?
+    } @loop!
+    @idx! 1 + -1 *
+  in
+
+  at is
+    index is _ in
+    -> @::index
+    @::len! -1 * @::index$ + pull
+  in
+  
+  fold is 
+    func is _ in
+    accu is _ in
+
+    -> @accu
+    -> @func
+
+    loop_start {
+      dup @lists::guard! != then {
+        @accu! @func! jump -> @accu
+        @loop_start!
+      } @std::if!
+    } @loop_start!
+
+    drop
+    @accu!
+  in
+
+  range is
+    from is _ in
+    to   is _ in
+    step is 1 in
+    -> @to
+    -> @from
+
+    @lists::guard$
+    lambda
+      (@to$ - @step$) -> @to
+      @to$
+      (@from$ < @to$)
+      loop?
+    in jump
+  in
+
+  // the provided function is expected to consume elementsS
+  foreach is
+    func is _ in
+    -> @func
+
+    lambda
+      @lists::foreach::func!!
+      dup @lists::guard$ != 
+      loop?
+    in jump
+
+    drop
+  in
+
+  join is 
+    sep is _ in
+    accu is "" in
+
+    -> @sep 
+    -> @accu
+
+    loop_start {
+      dup @lists::guard! != then {
+        @sep! @accu! + + -> @accu
+        @loop_start!
+      } @std::if!
+    } @loop_start!
+
+    drop
+    @accu!
+  in
+  "drop" is
+    lambda drop in @lists::foreach!
+  in
+  string is 
+    \space @lists::join!
+  in
+
+  find is
+    best is _ in
+    space is _ in
+    op is _ in
+    -> @lists::find::op
+    -> @lists::find::best
+
+    lambda 
+      dup -> @lists::find::space
+
+      @lists::find::best$ @op$! lambda 
+        @lists::find::space$ -> @lists::find::best
+      in jump?
+    in @lists::foreach!
+
+    @lists::find::best$
+  in
+
+  max is
+    lambda > in @lists::find!
+  in
+
+  min is
+    lambda < in @lists::find!
+  in
+
+  "dup" is 
+    lambda in @lists::map!
+  in
+
+  map is
+    func is _ in
+    len is _ in
+    idx is -1 in
+    -> @func
+
+    -1 -> @idx
+    @lists::len! -1 * 1 - -> @lists::map::len
+    @lists::guard!
+
+    lambda
+      @lists::map::len$ pull @func!!
+      @lists::map::idx @std::dec!
+      @lists::map::idx$ @lists::map::len$ >
+      loop?
+    in jump
+  in
+
+  minmax is
+    max is _ in
+    @lists::dup! @lists::max! -> @max @lists::min! @lists::minmax::max$
+  in
+}
+

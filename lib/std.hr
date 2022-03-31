@@ -1,0 +1,111 @@
+// place a guard at the beginning of the stack to detect possible underflow errors
+STACK_START
+
+// toplevel drop that doesn't remove the stack guard
+"drop" is
+  dup STACK_START != lambda
+    drop
+  in jump?
+in
+
+std {
+  op {
+    "+" is + in
+    "-" is - in
+    "*" is * in
+    "/" is / in
+    "drop" is drop in
+    or is + in
+    and is * in
+  }
+  if is
+    @then jump?
+  in
+  ifelse is
+    iftrue is _ in
+    iffalse is _ in
+
+    -> @iffalse
+    -> @iftrue
+
+    @iffalse$ swap lambda drop @iftrue! in jump? jump
+  in
+
+  endl is
+    "\n" print
+  in
+  println is
+    print \n print
+  in
+  dec is
+    ref is 0 in @::ref put
+    @::ref! get 1 - @::ref! put
+  in
+  inc is
+    ref is 0 in @::ref put
+    @::ref! get 1 + @::ref! put
+  in
+  alert is
+    "alert(\"" swap "\")" + + __jseval drop
+  in
+  prompt is 
+    "prompt(\"" swap "\")" + + __jseval
+  in
+  dropall is
+    STACK_START -> @lists::foreach::guard
+    lambda drop in @lists::foreach!
+    "|" -> @lists::foreach::guard
+    STACK_START
+  in
+
+  pow is
+    base is _ in
+    exp  is _ in
+    val  is 1 in
+    op   is _ in
+
+    1 -> @val
+    @std::op::* -> @op
+
+    -> @exp
+    -> @base
+
+    (@exp! < 0) lambda
+      @std::op::/ -> @op
+      (@exp! * -1) -> @exp
+    in jump?
+
+    0 @exp! @std::range! 
+    lambda
+      drop
+      @val! @base! @op! jump -> @val
+    in @std::foreach!
+
+    @val!
+  in
+
+  print-stack is
+    STACK_START -> @lists::guard
+    @lists::dup!
+    lambda print in @lists::foreach!
+    | -> @lists::guard
+  in
+
+  loop-range is
+    func is _ in -> @::func
+    len is _ in -> @::len
+    idx is _ in -> @::idx
+    @::idx$ @::len$ <
+    lambda
+      @::idx$
+      @func$!
+      @::idx @std::inc!
+      @::idx$ @::len$ < loop?
+    in jump?
+  in
+}
+
+"generator.hr" include
+"lists.hr" include
+"memory.hr" include
+

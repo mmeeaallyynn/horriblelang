@@ -23,8 +23,7 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
     let mut parsed: Vec<Command> = vec![];
 
     if !(prog[*i] == "(") {
-        error(&format!("expected opening parenthesis, found {}", prog[*i]));
-        panic!();
+        panic!("expected opening parenthesis, found {}", prog[*i]);
     }
     *i += 1;
 
@@ -42,8 +41,7 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
         "==" => Command::EQ,
         "!=" => Command::NE,
         _ => {
-            error(&format!("invalid operator: {}", prog[*i]));
-            panic!();
+            panic!("invalid operator: {}", prog[*i]);
         }
     };
     *i += 1;
@@ -52,8 +50,6 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
     parsed.push(op);
 
     if !(prog[*i] == ")") {
-//        error(&format!("expected closing parenthesis, found {}", prog[*i]));
-//        panic!();
         parsed.append(&mut parse_expression_continuation(prog, &mut i));
     }
     *i += 1;
@@ -62,7 +58,7 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
 }
 
 fn parse_expression_continuation(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> {
-    warn("Notherlang: operator precedence is not supported, use parentheses instead!");
+    println!("Notherlang: operator precedence is not supported, use parentheses instead!");
 
     let mut parsed: Vec<Command> = vec![];
 
@@ -78,8 +74,7 @@ fn parse_expression_continuation(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Com
         "==" => Command::EQ,
         "!=" => Command::NE,
         _ => {
-            error(&format!("invalid operator: {}", prog[*i]));
-            panic!();
+            panic!("invalid operator: {}", prog[*i]);
         }
     };
     *i += 1;
@@ -105,23 +100,22 @@ fn parse_value(prog: &Vec<&str>, i: &mut usize) -> Vec<Command> {
         s if s.starts_with("@") && s.ends_with("!") => {
             let mut name = String::from(s);
             name.pop();
-            parsed.push(Command::Reference(name, 0));
+            parsed.push(Command::NamedReference(name, 0));
             parsed.push(Command::Jmp);
             *i += 1;
         },
         s if s.starts_with("@") && s.ends_with("$") => {
             let mut name = String::from(s);
             name.pop();
-            parsed.push(Command::Reference(name, 0));
+            parsed.push(Command::NamedReference(name, 0));
             parsed.push(Command::Get);
             *i += 1;
         },
         s if s.starts_with("@") => {
-            parsed.push(Command::Reference(s.into(), 0));
+            parsed.push(Command::NamedReference(s.into(), 0));
             *i += 1;
         }
         s => {
-            log("is a string!");
             parsed.push(Command::Pushs(s.into()));
             *i += 1;
         }

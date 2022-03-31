@@ -6,6 +6,11 @@ edition = "2018"
 
 [dependencies]
 regex = "1"
+lazy_static = "1.4.0"
+rustyline = "9.1.2"
+rustyline-derive = "0.6.0"
 
 [profile.release]
-opt-level="z"
+#opt-level = 3
+#lto = true
+debug = true

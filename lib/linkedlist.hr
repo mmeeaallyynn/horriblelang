@@ -1,9 +1,5 @@
 "std.hr" include
 
-blubb is
-
-in
-
 
 linked-list is
   element is value next in

@@ -98,8 +98,8 @@ impl Environment {
             prefix: Vec::new(),
             stack: Stack { stack: Vec::new() },
             definitions: HashMap::new(),
-            program: program,
-            source: source,
+            program,
+            source,
             idx: 0,
             execute: true,
             level: 0
@@ -131,12 +131,10 @@ impl Environment {
         self.prefix.push(s);
         let name = self.prefix.join("::");
 
-        if self.definitions.contains_key(&name) {
-            *self.definitions.get_mut(&name).unwrap() = self.idx;
+        if let std::collections::hash_map::Entry::Vacant(e) = self.definitions.entry(name.clone()) {
+            e.insert(self.idx);
         } else {
-            self.definitions.insert(
-                name, self.idx
-            );
+            *self.definitions.get_mut(&name).unwrap() = self.idx;
         }
     }
 }
@@ -173,9 +171,9 @@ impl Stack {
 }
 
 impl RuntimeError {
-    fn new(msg: String, call_stack: &Vec<(usize, String, usize)>, env: &Environment) -> Self {
+    fn new(msg: String, call_stack: &[(usize, String, usize)], env: &Environment) -> Self {
         RuntimeError {
-            msg: msg, call_stack: call_stack.to_vec(), env: env.clone()
+            msg, call_stack: call_stack.to_vec(), env: env.clone()
         }
     }
 }
@@ -188,7 +186,7 @@ impl fmt::Display for RuntimeError {
         write!(f,
             "RuntimeError: {}\ncallstack: {:#?}\n",
             self.msg,
-            call_info);
+            call_info)?;
         write!(f, "Around here: {}", self.env.source[info_start_idx..info_end_idx].iter()
             .map(|sr| match sr {
                 SourceReference::Visible(s) => format!(" {}", s),
@@ -217,7 +215,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         env.level += 1;
                     }
                     else {
-                        return Err(RuntimeError::new("public define needs a label".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("public define needs a label".into(), &call_stack, env));
                     }
                 } else if env.execute {
                     if let Some(StackSlot::String(string)) = env.stack.pop() {
@@ -227,7 +225,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         env.level += 1;
                     }
                     else {
-                        return Err(RuntimeError::new("string required for private define".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("string required for private define".into(), &call_stack, env));
                     }
                 }
             },
@@ -247,7 +245,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                     }
                     env.program[env.idx] = Command::NamedReference(
                         full_name
-                            .ok_or_else(|| RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, &env))?,
+                            .ok_or_else(|| RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, env))?,
                         *offset
                     );
                 }
@@ -280,10 +278,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                 Command::Nop => { },
                 Command::Include => {
                     let filename = env.stack.pop_string()
-                        .ok_or_else(|| RuntimeError::new("expected file name for include".into(), &call_stack, &env))?;
+                        .ok_or_else(|| RuntimeError::new("expected file name for include".into(), &call_stack, env))?;
                     let content = fs::read_to_string(filename.clone())
                         .or_else(|_err| fs::read_to_string(format!("lib/{}", filename)))
-                        .or_else(|err| Err(RuntimeError::new(format!("unable to read include file: {}", err), &call_stack, &env)))?;
+                        .map_err(|err| RuntimeError::new(format!("unable to read include file: {}", err), &call_stack, env))?;
 
                     let result = lexer(content.to_string());
                     let tokens = result.program;
@@ -298,17 +296,17 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                 Command::Pushs(s) => {
                     env.stack.push(StackSlot::String(s.clone()))
                 },
-                Command::EndDefine | Command::Return => if call_stack.len() > 0 {
+                Command::EndDefine | Command::Return => if !call_stack.is_empty() {
                     env.idx = call_stack.pop().unwrap().0 as usize;
                 },
                 Command::LoopIf => {
                     let reference_name = call_stack.last()
-                        .ok_or_else(|| RuntimeError::new("can't use `loop?` on toplevel".into(), &call_stack, &env))?;
+                        .ok_or_else(|| RuntimeError::new("can't use `loop?` on toplevel".into(), &call_stack, env))?;
 
                     let position = reference_name.2;
 
                     let n = env.stack.pop_number()
-                        .ok_or_else(|| RuntimeError::new("expected number for a loop".into(), &call_stack, &env))?;
+                        .ok_or_else(|| RuntimeError::new("expected number for a loop".into(), &call_stack, env))?;
                     if n != 0.0 {
                         env.idx = position;
                     }
@@ -316,7 +314,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                 Command::JmpIf => {
                     let reference = env.stack.pop();
                     let value = env.stack.pop_number()
-                        .ok_or_else(|| RuntimeError::new("expected number for a conditional jump".into(), &call_stack, &env))?;
+                        .ok_or_else(|| RuntimeError::new("expected number for a conditional jump".into(), &call_stack, env))?;
 
                     if value != 0.0 {
                         match reference {
@@ -326,7 +324,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                                     call_stack.push((env.idx, n.clone(), next_idx));
                                     env.idx = next_idx;
                                 } else {
-                                    return Err(RuntimeError::new("reference not found in definitions for `jump?`".into(), &call_stack, &env));
+                                    return Err(RuntimeError::new("reference not found in definitions for `jump?`".into(), &call_stack, env));
                                 }
                             },
                             Some(StackSlot::AbsoluteReference(position)) => {
@@ -334,7 +332,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                                 env.idx = position;
                             },
                             _ => {
-                                return Err(RuntimeError::new("expected reference for a jump".into(), &call_stack, &env));
+                                return Err(RuntimeError::new("expected reference for a jump".into(), &call_stack, env));
                             }
                         }
                     }
@@ -347,7 +345,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                                 call_stack.push((env.idx, n.clone(), next_idx));
                                 env.idx = next_idx;
                             } else {
-                                return Err(RuntimeError::new("reference not found in definitions `jump`".into(), &call_stack, &env));
+                                return Err(RuntimeError::new("reference not found in definitions `jump`".into(), &call_stack, env));
                             }
                         },
                         Some(StackSlot::AbsoluteReference(position)) => {
@@ -355,7 +353,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                             env.idx = position;
                         },
                         _ => {
-                            return Err(RuntimeError::new("expected reference for a jump".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("expected reference for a jump".into(), &call_stack, env));
                         }
                     }
                 }
@@ -369,7 +367,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                                     format!("{}{}", character, r)
                                 ));
                             } else {
-                                return Err(RuntimeError::new(format!("{} is no a valid ascii character", l), &call_stack, &env));
+                                return Err(RuntimeError::new(format!("{} is no a valid ascii character", l), &call_stack, env));
                             }
                         } else if let (StackSlot::Number(r), StackSlot::String(l)) = (&right, &left) {
                             if let Ok(character) = TryInto::<char>::try_into(*r as u8) {
@@ -377,7 +375,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                                     format!("{}{}", l, character)
                                 ));
                             } else {
-                                return Err(RuntimeError::new(format!("{} is no a valid ascii character", r), &call_stack, &env));
+                                return Err(RuntimeError::new(format!("{} is no a valid ascii character", r), &call_stack, env));
                             }
                         } else if let (StackSlot::String(r), StackSlot::String(l)) = (&right, &left) {
                             env.stack.push(StackSlot::String(
@@ -392,10 +390,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                                 *r as usize + position
                             ));
                         } else {
-                            return Err(RuntimeError::new("add operator only supported for numbers or strings".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("add operator only supported for numbers or strings".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while adding!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while adding!".into(), &call_stack, env));
                     }
                 },
                 Command::Sub => {
@@ -405,28 +403,28 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         },
                         (Some(StackSlot::NamedReference(name, offset)), Some(StackSlot::AbsoluteReference(position))) => {
                             let r = env.definitions.get(&name)
-                                .ok_or_else(|| RuntimeError::new("reference not found in definitions for subtraction".into(), &call_stack, &env))? + offset;
+                                .ok_or_else(|| RuntimeError::new("reference not found in definitions for subtraction".into(), &call_stack, env))? + offset;
 
                             env.stack.push(StackSlot::Number((position - r) as f64));
                         },
                         (Some(StackSlot::AbsoluteReference(position)), Some(StackSlot::NamedReference(name, offset))) => {
                             let l = env.definitions.get(&name)
-                                .ok_or_else(|| RuntimeError::new("reference not found in definitions for subtraction".into(), &call_stack, &env))? + offset;
+                                .ok_or_else(|| RuntimeError::new("reference not found in definitions for subtraction".into(), &call_stack, env))? + offset;
 
                             env.stack.push(StackSlot::Number((l - position) as f64));
                         },
                         (Some(StackSlot::NamedReference(rname, roffset)), Some(StackSlot::NamedReference(lname, loffset))) => {
                             let r = env.definitions.get(&rname)
-                                .ok_or_else(|| RuntimeError::new("reference not found in definitions for subtraction".into(), &call_stack, &env))? + roffset;
+                                .ok_or_else(|| RuntimeError::new("reference not found in definitions for subtraction".into(), &call_stack, env))? + roffset;
                             let l = env.definitions.get(&lname)
-                                .ok_or_else(|| RuntimeError::new("reference not found in definitions for subtraction".into(), &call_stack, &env))? + loffset;
+                                .ok_or_else(|| RuntimeError::new("reference not found in definitions for subtraction".into(), &call_stack, env))? + loffset;
 
                             env.stack.push(StackSlot::Number((l - r) as f64));
                         },
                         (Some(StackSlot::AbsoluteReference(r)), Some(StackSlot::AbsoluteReference(position))) => {
                             env.stack.push(StackSlot::Number((position - r) as f64));
                         },
-                        _ => return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, &env))
+                        _ => return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, env))
                     };
                 },
                 Command::Mul => {
@@ -434,10 +432,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(l * r));
                         } else {
-                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while multiplying!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while multiplying!".into(), &call_stack, env));
                     }
                 },
                 Command::Div => {
@@ -445,10 +443,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(l / r));
                         } else {
-                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while dividing!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while dividing!".into(), &call_stack, env));
                     }
                 },
                 Command::Mod => {
@@ -456,10 +454,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(l % r));
                         } else {
-                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow in modulo operation!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow in modulo operation!".into(), &call_stack, env));
                     }
                 },
                 Command::LT => {
@@ -467,10 +465,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(if l < r { 1.0 } else { 0.0 }));
                         } else {
-                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, env));
                     }
 
                 },
@@ -479,10 +477,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(if l <= r { 1.0 } else { 0.0 }));
                         } else {
-                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, env));
                     }
                 },
                 Command::GT => {
@@ -490,10 +488,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(if l > r { 1.0 } else { 0.0 }));
                         } else {
-                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, env));
                     }
                 },
                 Command::GE => {
@@ -501,10 +499,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         if let (StackSlot::Number(r), StackSlot::Number(l)) = (right, left) {
                             env.stack.push(StackSlot::Number(if l >= r { 1.0 } else { 0.0 }));
                         } else {
-                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("arithmetic is only supported for numbers".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, env));
                     }
                 },
                 Command::EQ => {
@@ -523,7 +521,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                             }
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, env));
                     }
                 },
                 Command::NE => {
@@ -542,7 +540,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                             }
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while comparing!".into(), &call_stack, env));
                     }
                 },
                 Command::Not => {
@@ -556,10 +554,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                                 }
                             ));
                         } else {
-                            return Err(RuntimeError::new("negation is only supported for Numbers".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("negation is only supported for Numbers".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("stack underflow while negating".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while negating".into(), &call_stack, env));
                     }
                 },
                 Command::Dup => {
@@ -570,7 +568,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         env.stack.push(top);
                         env.stack.push(bot);
                     } else {
-                        return Err(RuntimeError::new("stack underflow while swapping".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("stack underflow while swapping".into(), &call_stack, env));
                     }
                 },
                 Command::Drop => {
@@ -594,31 +592,31 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         Some(StackSlot::String(s)) => value = Command::Pushs(s),
                         Some(StackSlot::NamedReference(r, offset)) => value = Command::NamedReference(String::from("@") + r.as_ref(), offset),
                         Some(StackSlot::AbsoluteReference(position)) => value = Command::AbsoluteReference(position),
-                        None => return Err(RuntimeError::new("stack underflow for arrow expression".into(), &call_stack, &env))
+                        None => return Err(RuntimeError::new("stack underflow for arrow expression".into(), &call_stack, env))
                     };
 
                     if let Command::NamedReference(name, offset) = env.program[env.idx + 1].clone() {
-                        if let Ok(pos) = Environment::resolve_reference(&env.definitions, name.split("@").collect::<Vec<&str>>()[1].into()) {
+                        if let Ok(pos) = Environment::resolve_reference(&env.definitions, name.split('@').collect::<Vec<&str>>()[1].into()) {
                             env.program[pos + 1 + offset] = value.clone();
                             env.idx += 1;
                         }
                         else {
-                            return Err(RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, &env));
+                            return Err(RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("reference required for arrow put".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("reference required for arrow put".into(), &call_stack, env));
                     }
                 },
                 Command::Put => {
                     let pos = match env.stack.pop() {
                         Some(StackSlot::NamedReference(name, offset)) => {
                             let base = env.definitions.get(&name)
-                                .ok_or_else(|| RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, &env))?;
+                                .ok_or_else(|| RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, env))?;
 
                             base + offset
                         },
                         Some(StackSlot::AbsoluteReference(position)) => position,
-                        _ => return Err(RuntimeError::new("reference required for put".into(), &call_stack, &env))
+                        _ => return Err(RuntimeError::new("reference required for put".into(), &call_stack, env))
                     };
 
                     match env.stack.pop() {
@@ -627,7 +625,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         Some(StackSlot::NamedReference(r, offset)) => env.program[pos + 1] = Command::NamedReference(String::from("@") + r.as_ref(), offset),
                         Some(StackSlot::AbsoluteReference(position)) => env.program[pos + 1] = Command::AbsoluteReference(position),
                         None => {
-                            return Err(RuntimeError::new("value required for put".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("value required for put".into(), &call_stack, env));
                         }
                     };
                 },
@@ -635,12 +633,12 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                     let pos = match env.stack.pop() {
                         Some(StackSlot::NamedReference(name, offset)) => {
                             let base = env.definitions.get(&name)
-                                .ok_or_else(|| RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, &env))?;
+                                .ok_or_else(|| RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, env))?;
 
                             base + offset
                         },
                         Some(StackSlot::AbsoluteReference(position)) => position,
-                        _ => return Err(RuntimeError::new("reference required for get".into(), &call_stack, &env))
+                        _ => return Err(RuntimeError::new("reference required for get".into(), &call_stack, env))
                     };
 
                     match env.program.get(pos + 1) {
@@ -648,7 +646,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         Some(Command::Pushs(s)) => env.stack.push(StackSlot::String(s.clone())),
                         Some(Command::NamedReference(s, offset)) => env.stack.push(StackSlot::NamedReference(String::from(&s[1..]), *offset)),
                         Some(Command::AbsoluteReference(position)) => env.stack.push(StackSlot::AbsoluteReference(*position)),
-                        _ => return Err(RuntimeError::new("value required for get".into(), &call_stack, &env))
+                        _ => return Err(RuntimeError::new("value required for get".into(), &call_stack, env))
                     }
                 }
                 Command::Pull => {
@@ -658,10 +656,10 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         } else if n.is_sign_negative() && n.floor() == n {
                             env.stack.push(env.stack.stack[(env.stack.stack.len() as isize + n as isize) as usize].clone())
                         } else {
-                            return Err(RuntimeError::new("expected integer for pull".into(), &call_stack, &env));
+                            return Err(RuntimeError::new("expected integer for pull".into(), &call_stack, env));
                         }
                     } else {
-                        return Err(RuntimeError::new("expected integer for pull".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("expected integer for pull".into(), &call_stack, env));
                     }
                 },
                 Command::NamedReference(s, offset) => {
@@ -673,7 +671,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         let absolute_addess = env.definitions[name] + offset;
                         env.program[env.idx] = Command::AbsoluteReference(absolute_addess);
                     } else {
-                        return Err(RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, &env));
+                        return Err(RuntimeError::new(format!("no such symbol: `{}`", name), &call_stack, env));
                     }
                 },
                 Command::AbsoluteReference(position) => {
@@ -685,11 +683,11 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         if env.definitions.contains_key(s) {
                             env.stack.push(StackSlot::NamedReference(String::from(s), 0));
                         } else {
-                            return Err(RuntimeError::new(format!("no such symbol: `{}`", s), &call_stack, &env));
+                            return Err(RuntimeError::new(format!("no such symbol: `{}`", s), &call_stack, env));
 
                         }
                     } else {
-                        return Err(RuntimeError::new("string required".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("string required".into(), &call_stack, env));
                     }
                 },
                 Command::Lambda => {
@@ -701,7 +699,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                 }
                 Command::PrintStack => println!("{:?}", env.stack.stack),
                 Command::Placeholder => {
-                    return Err(RuntimeError::new(format!("encountered placeholder"), &call_stack, &env));
+                    return Err(RuntimeError::new("encountered placeholder".into(), &call_stack, env));
                 },
                 Command::Bytes => if let StackSlot::String(s) = env.stack.pop().unwrap() {
                         for byte in s.as_bytes() {
@@ -709,7 +707,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         }
                     }
                     else {
-                        return Err(RuntimeError::new("needs a string to convert into number list".into(), &call_stack, &env));
+                        return Err(RuntimeError::new("needs a string to convert into number list".into(), &call_stack, env));
                     },
                 _ => {}
             }
@@ -726,6 +724,7 @@ fn ends_with_whitespace(string: &str) -> bool {
     last == Some('\n') || last == Some('\t') || last == Some(' ')
 }
 
+/*
 fn lexer2(program: String) -> Environment {
     let mut commands: Vec<Command> = Vec::new();
     let mut source_ref: Vec<(usize, usize)> = Vec::new();
@@ -843,7 +842,7 @@ fn lexer2(program: String) -> Environment {
     println!("source refs: {:?}", source_ref.iter().map(|(start, end)| &program[*start..*end]).collect::<Vec<&str>>());
     Environment::new(commands, vec![])
 }
-
+*/
 fn lexer(program: String) -> Environment {
     let mut commands: Vec<Command> = Vec::new();
     let mut source: Vec<SourceReference> = Vec::new();
@@ -861,7 +860,7 @@ fn lexer(program: String) -> Environment {
 
     while idx < prog.len() {
         let next: Command =
-            match prog[idx].as_ref() {
+            match prog[idx] {
                 "include" =>
                     Command::Include,
                 "STACK" =>
@@ -935,10 +934,10 @@ fn lexer(program: String) -> Environment {
                 s if s == "\\space" => {
                     Command::Pushs(String::from(" "))
                 },
-                s if String::from(s).starts_with("\"") => {
+                s if String::from(s).starts_with('\"') => {
                     let mut string = String::from(s);
 
-                    while !prog[idx].ends_with("\"") || prog[idx].ends_with("\\\"") {
+                    while !prog[idx].ends_with('\"') || prog[idx].ends_with("\\\"") {
                         idx += 1;
                         string.push(' ');
                         string.push_str(prog[idx].as_ref());
@@ -949,7 +948,7 @@ fn lexer(program: String) -> Environment {
                         .replace("\\\"", "\"")
                         .replace("\\n", "\n"))
                 },
-                s if s.chars().nth(0).unwrap() == '@' => {
+                s if s.starts_with('@') => {
                     let jumps: Vec<Command> = s.chars().rev()
                         .map_while(|c| match c {
                             '$' => Some(Command::Get),
@@ -964,7 +963,7 @@ fn lexer(program: String) -> Environment {
                     commands.append(&mut jumps.into_iter().rev().collect());
                     Command::Nop
                 },
-                s if s.chars().nth(0).unwrap() == '_' => {
+                s if s.starts_with('_') => {
                     let n = (&s[1..]).parse::<usize>();
                     if let Ok(v) = n {
                         for _i in 0..v-1 {
@@ -976,7 +975,7 @@ fn lexer(program: String) -> Environment {
                 },
                 s if s.parse::<f64>().is_ok() =>
                     Command::Pushn(s.parse::<f64>().unwrap()),
-                s if String::from(s).starts_with("(") => {
+                s if String::from(s).starts_with('(') => {
                     let stuff = arithparser::parse(&prog, &mut idx);
                     for com in stuff[..stuff.len() - 1].iter() {
                         commands.push(com.clone());
@@ -1006,7 +1005,7 @@ pub fn run_string(mut env: &mut Environment, input: &str) -> Result<(), RuntimeE
     env.program.append(&mut result.program);
     env.source.append(&mut result.source);
 
-    let res = run(&mut env);
+    let res = run(env);
     env.idx = env.program.len();
 
     res

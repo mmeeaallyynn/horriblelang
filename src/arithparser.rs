@@ -1,33 +1,33 @@
 use crate::*;
 
 
-pub fn parse(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> {
-    let parsed = parse_expression(prog, &mut i);
+pub fn parse(prog: &[&str], i: &mut usize) -> Vec<Command> {
+    let parsed = parse_expression(prog, i);
 
     *i -= 1;
     parsed
 }
 
-fn parse_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> {
+fn parse_expression(prog: &[&str], i: &mut usize) -> Vec<Command> {
     let mut parsed: Vec<Command> = vec![];
 
     match prog[*i] {
-        "(" => parsed.append(&mut parse_binary_expression(prog, &mut i)),
-        _ => parsed.append(&mut parse_value(prog, &mut i)),
+        "(" => parsed.append(&mut parse_binary_expression(prog, i)),
+        _ => parsed.append(&mut parse_value(prog, i)),
     }
 
     parsed
 }
 
-fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> {
+fn parse_binary_expression(prog: &[&str], i: &mut usize) -> Vec<Command> {
     let mut parsed: Vec<Command> = vec![];
 
-    if !(prog[*i] == "(") {
+    if prog[*i] != "(" {
         panic!("expected opening parenthesis, found {}", prog[*i]);
     }
     *i += 1;
 
-    parsed.append(&mut parse_expression(prog, &mut i));
+    parsed.append(&mut parse_expression(prog, i));
 
     let op = match prog[*i] {
         "+" => Command::Add,
@@ -46,18 +46,18 @@ fn parse_binary_expression(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> 
     };
     *i += 1;
 
-    parsed.append(&mut parse_expression(prog, &mut i));
+    parsed.append(&mut parse_expression(prog, i));
     parsed.push(op);
 
-    if !(prog[*i] == ")") {
-        parsed.append(&mut parse_expression_continuation(prog, &mut i));
+    if prog[*i] != ")" {
+        parsed.append(&mut parse_expression_continuation(prog, i));
     }
     *i += 1;
 
     parsed
 }
 
-fn parse_expression_continuation(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Command> {
+fn parse_expression_continuation(prog: &[&str], i: &mut usize) -> Vec<Command> {
     println!("Notherlang: operator precedence is not supported, use parentheses instead!");
 
     let mut parsed: Vec<Command> = vec![];
@@ -79,17 +79,17 @@ fn parse_expression_continuation(prog: &Vec<&str>, mut i: &mut usize) -> Vec<Com
     };
     *i += 1;
 
-    parsed.append(&mut parse_expression(prog, &mut i));
+    parsed.append(&mut parse_expression(prog, i));
     parsed.push(op);
 
-    if !(prog[*i] == ")") {
-        parsed.append(&mut parse_expression_continuation(prog, &mut i));
+    if prog[*i] != ")" {
+        parsed.append(&mut parse_expression_continuation(prog, i));
     }
 
     parsed
 }
 
-fn parse_value(prog: &Vec<&str>, i: &mut usize) -> Vec<Command> {
+fn parse_value(prog: &[&str], i: &mut usize) -> Vec<Command> {
     let mut parsed: Vec<Command> = vec![];
 
     match prog[*i] {
@@ -97,21 +97,21 @@ fn parse_value(prog: &Vec<&str>, i: &mut usize) -> Vec<Command> {
             parsed.push(Command::Pushn(prog[*i].parse::<f64>().unwrap()));
             *i += 1;
         },
-        s if s.starts_with("@") && s.ends_with("!") => {
+        s if s.starts_with('@') && s.ends_with('!') => {
             let mut name = String::from(s);
             name.pop();
             parsed.push(Command::NamedReference(name, 0));
             parsed.push(Command::Jmp);
             *i += 1;
         },
-        s if s.starts_with("@") && s.ends_with("$") => {
+        s if s.starts_with('@') && s.ends_with('$') => {
             let mut name = String::from(s);
             name.pop();
             parsed.push(Command::NamedReference(name, 0));
             parsed.push(Command::Get);
             *i += 1;
         },
-        s if s.starts_with("@") => {
+        s if s.starts_with('@') => {
             parsed.push(Command::NamedReference(s.into(), 0));
             *i += 1;
         }

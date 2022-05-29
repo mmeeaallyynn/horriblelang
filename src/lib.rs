@@ -76,7 +76,7 @@ pub struct Stack {
 #[derive(Debug)]
 pub struct RuntimeError {
     msg: String,
-    call_stack: Vec<(usize, String, usize)>,
+    call_stack: Vec<(usize, usize)>,
     env: Environment
 }
 
@@ -171,7 +171,7 @@ impl Stack {
 }
 
 impl RuntimeError {
-    fn new(msg: String, call_stack: &[(usize, String, usize)], env: &Environment) -> Self {
+    fn new(msg: String, call_stack: &[(usize, usize)], env: &Environment) -> Self {
         RuntimeError {
             msg, call_stack: call_stack.to_vec(), env: env.clone()
         }
@@ -180,9 +180,14 @@ impl RuntimeError {
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let call_info = self.call_stack.iter().map(|f| f.1.clone()).collect::<Vec<String>>();
-        let info_start_idx = usize::max(0, self.env.idx - 10);
-        let info_end_idx = usize::min(self.env.source.len(), self.env.idx + 10);
+        let call_info = self.call_stack.iter()
+            .map(|f|
+                format!("{}",
+                    self.env.source[f.1 - 1]
+                )
+            ).collect::<Vec<String>>();
+        let info_start_idx = isize::max(0, self.env.idx as isize - 10) as usize;
+        let info_end_idx = isize::min(self.env.source.len() as isize, self.env.idx as isize + 10) as usize;
         write!(f,
             "RuntimeError: {}\ncallstack: {:#?}\n",
             self.msg,
@@ -202,8 +207,17 @@ impl fmt::Display for Stack {
     }
 }
 
+impl fmt::Display for SourceReference {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            SourceReference::Visible(name) => name,
+            SourceReference::Invisible => ""
+        })
+    }
+}
+
 fn run(env: &mut Environment) -> Result<(), RuntimeError> {
-    let mut call_stack: Vec<(usize, String, usize)> = Vec::new();
+    let mut call_stack: Vec<(usize, usize)> = Vec::new();
 
     while env.idx < env.program.len() { 
         match &env.program[env.idx] {
@@ -303,7 +317,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                     let reference_name = call_stack.last()
                         .ok_or_else(|| RuntimeError::new("can't use `loop?` on toplevel".into(), &call_stack, env))?;
 
-                    let position = reference_name.2;
+                    let position = reference_name.1;
 
                     let n = env.stack.pop_number()
                         .ok_or_else(|| RuntimeError::new("expected number for a loop".into(), &call_stack, env))?;
@@ -321,14 +335,14 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                             Some(StackSlot::NamedReference(n, offset)) => {
                                 if env.definitions.contains_key(&n) {
                                     let next_idx = env.definitions[&n] + offset;
-                                    call_stack.push((env.idx, n.clone(), next_idx));
+                                    call_stack.push((env.idx, next_idx));
                                     env.idx = next_idx;
                                 } else {
                                     return Err(RuntimeError::new("reference not found in definitions for `jump?`".into(), &call_stack, env));
                                 }
                             },
                             Some(StackSlot::AbsoluteReference(position)) => {
-                                call_stack.push((env.idx, format!("->{}", position), position));
+                                call_stack.push((env.idx, position));
                                 env.idx = position;
                             },
                             _ => {
@@ -342,14 +356,14 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         Some(StackSlot::NamedReference(n, offset)) => {
                             if env.definitions.contains_key(&n) {
                                 let next_idx = env.definitions[&n] + offset;
-                                call_stack.push((env.idx, n.clone(), next_idx));
+                                call_stack.push((env.idx, next_idx));
                                 env.idx = next_idx;
                             } else {
                                 return Err(RuntimeError::new("reference not found in definitions `jump`".into(), &call_stack, env));
                             }
                         },
                         Some(StackSlot::AbsoluteReference(position)) => {
-                            call_stack.push((env.idx, format!("->{}", position), position));
+                            call_stack.push((env.idx, position));
                             env.idx = position;
                         },
                         _ => {
@@ -724,125 +738,6 @@ fn ends_with_whitespace(string: &str) -> bool {
     last == Some('\n') || last == Some('\t') || last == Some(' ')
 }
 
-/*
-fn lexer2(program: String) -> Environment {
-    let mut commands: Vec<Command> = Vec::new();
-    let mut source_ref: Vec<(usize, usize)> = Vec::new();
-
-    let mut start_idx = 0;
-    let mut end_idx = 1;
-
-    while end_idx < program.len() {
-        let mut next = match (&program[start_idx..end_idx], &program[end_idx..end_idx+1]) {
-            ("include", " " | "\n") => Some(Command::Include),
-            ("STACK", " " | "\n")   => Some(Command::PrintStack),
-            ("{", " " | "\n")       => Some(Command::Define(Visibility::Public)),
-            ("}", " " | "\n")       => Some(Command::EndDefine),
-            ("is", " " | "\n")      => Some(Command::Define(Visibility::Public)),
-            ("in", " " | "\n")      => Some(Command::EndDefine),
-            ("jump", " " | "\n")    => Some(Command::Jmp),
-            ("jump?", " " | "\n")   => Some(Command::JmpIf),
-            ("loop?", " " | "\n")   => Some(Command::LoopIf),
-            ("not", " " | "\n")     => Some(Command::Not),
-            ("dup", " " | "\n")     => Some(Command::Dup),
-            ("swap", " " | "\n")    => Some(Command::Swap),
-            ("drop", " " | "\n")    => Some(Command::Drop),
-            ("put", " " | "\n")     => Some(Command::Put),
-            ("get", " " | "\n")     => Some(Command::Get),
-            ("pull", " " | "\n")    => Some(Command::Pull),
-            ("->", " " | "\n")      => Some(Command::ArrowPut),
-            ("lambda", " " | "\n")  => Some(Command::Lambda),
-            ("__bytes", " " | "\n") => Some(Command::Bytes),
-            ("+", " " | "\n")       => Some(Command::Add),
-            ("-", " " | "\n")       => Some(Command::Sub),
-            ("*", " " | "\n")       => Some(Command::Mul),
-            ("/", " " | "\n")       => Some(Command::Div),
-            ("%", " " | "\n")       => Some(Command::Mod),
-            ("<", " " | "\n")       => Some(Command::LT),
-            ("<=", " " | "\n")      => Some(Command::LE),
-            (">", " " | "\n")       => Some(Command::GT),
-            (">=", " " | "\n")      => Some(Command::GE),
-            ("==", " " | "\n")      => Some(Command::EQ),
-            ("!=", " " | "\n")      => Some(Command::NE),
-            ("addr", " " | "\n")    => Some(Command::AddressOf),
-            ("print", " " | "\n")   => Some(Command::Print),
-            ("_", " " | "\n")       => Some(Command::Return),
-            ("\\space", " " | "\n") => Some(Command::Pushs(" ".into())),
-            _ => None
-        };
-        let mut found = true;
-        if next.is_none() {
-            match &program[start_idx..end_idx] {
-                s if s.chars().nth(0) == Some('"') && 
-                     s.chars().last() == Some('"') => {
-                    commands.push(Command::Pushs(program[start_idx + 1..end_idx - 1].into()));
-                    source_ref.push((start_idx, end_idx));
-                },
-                s if s.chars().nth(0) == Some('@') && ends_with_whitespace(s) => {
-                    let jumps: Vec<Command> = s[0..s.len() - 1].chars().rev()
-                        .map_while(|c| match c {
-                            '$' => Some(Command::Get),
-                            '!' => Some(Command::Jmp),
-                            '?' => Some(Command::JmpIf),
-                            _ => None
-                        }).collect();
-
-                    commands.push(Command::NamedReference(String::from(&s[0..s.len() - jumps.len() - 1]), 0));
-                    source_ref.push((start_idx, end_idx));
-                    source_ref.append(&mut (0..jumps.len()).map(|_| (start_idx, end_idx)).collect());
-                    commands.append(&mut jumps.into_iter().rev().collect());
-                },
-                s if s.chars().nth(0) == Some('_') && ends_with_whitespace(s) => {
-                    let n = (&s[1..]).parse::<usize>();
-                    if let Ok(v) = n {
-                        for _i in 0..v {
-                            commands.push(Command::Return);
-                            source_ref.push((start_idx, end_idx));
-                        }
-                    }
-                },
-                s if s[0..s.len() - 1].parse::<f64>().is_ok() && ends_with_whitespace(s) => {
-                    commands.push(Command::Pushn(s[0..s.len() - 1].parse::<f64>().unwrap()));
-                    source_ref.push((start_idx, end_idx));
-                },
-                s if String::from(s).starts_with("(") => {
-                    // TODO
-                }
-                s if ends_with_whitespace(s) => {
-                    commands.push(Command::Pushs(String::from(&s[0..s.len() - 1])));
-                    source_ref.push((start_idx, end_idx));
-                }
-                s if s.starts_with("//") && s.chars().last() == Some('\n') => {
-                    // found
-                }
-                _ => {
-                }
-            }
-        }
-
-        if next.is_some() {
-            source_ref.push((start_idx, end_idx));
-        }
-
-        if !next.is_none() || found {
-            start_idx = end_idx;
-        }
-        end_idx += 1;
-
-        if let Some(token) = next {
-            commands.push(token);
-        }
-
-        while program.chars().nth(start_idx) == Some(' ') || program.chars().nth(start_idx) == Some('\n') {
-            start_idx += 1;
-            end_idx += 1;
-        }
-    }
-
-    println!("source refs: {:?}", source_ref.iter().map(|(start, end)| &program[*start..*end]).collect::<Vec<&str>>());
-    Environment::new(commands, vec![])
-}
-*/
 fn lexer(program: String) -> Environment {
     let mut commands: Vec<Command> = Vec::new();
     let mut source: Vec<SourceReference> = Vec::new();
@@ -958,7 +853,7 @@ fn lexer(program: String) -> Environment {
                         }).collect();
 
                     commands.push(Command::NamedReference(String::from(&s[0..s.len() - jumps.len()]), 0));
-                    source.push(SourceReference::Invisible);
+                    source.push(SourceReference::Visible(s.into()));
                     source.append(&mut (0..jumps.len()).map(|_| SourceReference::Invisible).collect());
                     commands.append(&mut jumps.into_iter().rev().collect());
                     Command::Nop

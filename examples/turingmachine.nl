@@ -13,7 +13,8 @@ turingmachine is
   step is 1 in
 
   next is
-    @turingmachine::read! +
+    STACK
+    @turingmachine::read! 49 + +
     addr jump
 
     @turingmachine::write!
@@ -47,5 +48,5 @@ copyrules is
 in
 
 @copyrules!
-@turingmachine::next!
+// @turingmachine::next!
 | @turingmachine::tape! "" @lists::join!

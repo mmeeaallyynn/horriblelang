@@ -33,7 +33,7 @@ fn main() {
     else {
         loop {
             let readline = rl.readline(
-                if env.execute {
+                if env.execute  {
                     ">> "
                 }
                 else {

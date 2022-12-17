@@ -1,4 +1,4 @@
-"std.nl" include
+"std.hr" include
 
 turingmachine is 
   tape is 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 in
@@ -14,7 +14,7 @@ turingmachine is
   step is 1 in
 
   next is
-    @turingmachine::read! +
+    @turingmachine::read! 48 + +
     addr jump
 
     @turingmachine::write!
@@ -49,4 +49,4 @@ in
 
 @copyrules!
 @turingmachine::next!
-| @turingmachine::tape! "" @lists::join!
+| @turingmachine::tape! lambda print \space print in @lists::foreach! \n print

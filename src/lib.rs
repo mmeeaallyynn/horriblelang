@@ -695,6 +695,7 @@ fn parser(env: &mut Environment) -> Result<(), RuntimeError> {
         match &env.program[env.idx] {
             Command::Define(v, _) => {
                 define_stack.push(env.idx);
+                env.level += 1;
                 if let Visibility::Public = v {
                     if let Command::Pushs(string) = env.program[env.idx - 1].clone() {
                         env.define_new(string);
@@ -718,7 +719,7 @@ fn parser(env: &mut Environment) -> Result<(), RuntimeError> {
             },
             Command::EndDefine => {
                 let start_idx = define_stack.pop().unwrap();
-                env.level += 1;
+                env.level -= 1;
                 env.prefix.pop();
                 match &env.program[start_idx] {
                     Command::Define(v, _) => {

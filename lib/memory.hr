@@ -1,10 +1,10 @@
 memory {
-  mem is _1000 in
+  mem is _10000 in
   idx is 0 in
-  free-list is _100 in
-  free-list-len is 50 in
-  block-list is _100 in
-  block-list-len is 50 in
+  free-list is _1000 in
+  free-list-len is 500 in
+  block-list is _1000 in
+  block-list-len is 500 in
 
   init-free-list is
     0 @memory::free-list-len$ @lists::range!
@@ -76,7 +76,7 @@ memory {
   init is
     @memory::init-free-list!
     @memory::init-block-list!
-    0 1000 @memory::add-free-block!
+    0 10000 @memory::add-free-block!
   in
 
   alloc is

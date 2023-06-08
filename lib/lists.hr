@@ -19,7 +19,7 @@ lists {
     -> @::index
     @::len! -1 * @::index$ + pull
   in
-  
+
   fold is 
     func is _ in
     accu is _ in

@@ -102,7 +102,7 @@ linked-list is
       @::ref$ @::next-item! -> @::ref
     in @std::loop-range!
 
-    @::ref$$
+    @::ref$
   in
 
   delete is

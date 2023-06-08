@@ -1,0 +1,666 @@
+// place a guard at the beginning of the stack to detect possible underflow errors
+STACK_START
+
+// toplevel drop that doesn't remove the stack guard
+"drop" is
+  dup STACK_START != lambda
+    drop
+  in jump?
+in
+
+std {
+  op {
+    "+" is + in
+    "-" is - in
+    "*" is * in
+    "/" is / in
+    "drop" is drop in
+    or is + in
+    and is * in
+  }
+  if is
+    @then jump?
+  in
+  ifelse is
+    iftrue is _ in
+    iffalse is _ in
+
+    -> @iffalse
+    -> @iftrue
+
+    @iffalse$ swap lambda drop @iftrue! in jump? jump
+  in
+
+  endl is
+    "\n" print
+  in
+  println is
+    print \n print
+  in
+  dec is
+    ref is 0 in @::ref put
+    @::ref! get 1 - @::ref! put
+  in
+  inc is
+    ref is 0 in @::ref put
+    @::ref! get 1 + @::ref! put
+  in
+  alert is
+    "alert(\"" swap "\")" + + __jseval drop
+  in
+  prompt is 
+    "prompt(\"" swap "\")" + + __jseval
+  in
+  dropall is
+    STACK_START -> @lists::foreach::guard
+    lambda drop in @lists::foreach!
+    "|" -> @lists::foreach::guard
+    STACK_START
+  in
+
+  pow is
+    base is _ in
+    exp  is _ in
+    val  is 1 in
+    op   is _ in
+
+    1 -> @val
+    @std::op::* -> @op
+
+    -> @exp
+    -> @base
+
+    (@exp! < 0) lambda
+      @std::op::/ -> @op
+      (@exp! * -1) -> @exp
+    in jump?
+
+    0 @exp! @std::range! 
+    lambda
+      drop
+      @val! @base! @op! jump -> @val
+    in @std::foreach!
+
+    @val!
+  in
+
+  print-stack is
+    STACK_START -> @lists::guard
+    @lists::dup!
+    lambda print in @lists::foreach!
+    | -> @lists::guard
+  in
+
+  loop-range is
+    func is _ in -> @::func
+    len is _ in -> @::len
+    idx is _ in -> @::idx
+    @::idx$ @::len$ <
+    lambda
+      @::idx$
+      @func$!
+      @::idx @std::inc!
+      @::idx$ @::len$ < loop?
+    in jump?
+  in
+}
+
+
+generator is
+  // consumes initial initial value, function point, reference to memory with 3 spaces 
+  // produces reference to memory
+  // write params for new generator a specified memory location
+  new is
+    -> @generator::value
+    -> @generator::func
+    -> @generator::ref 
+    "gen" @generator::ref! 2 + put
+    @generator::value! @generator::ref! 1 + put
+    @generator::func! @generator::ref! put
+    @generator::ref!
+  in
+  // load a generator from an address
+  load is
+    -> @generator::ref 
+    @generator::ref!!
+    "gen" != dup lambda "not a generator!" print in jump?
+    not lambda
+      -> @generator::value
+      -> @generator::func
+    in jump?
+  in
+  // save the state of the current generator
+  save is
+    @generator::ref!
+    @generator::func!
+    @generator::value!
+    @generator::new!
+    drop
+  in
+  // consumes integer number
+  // produce the next n items as a list
+  take is
+    @lists::guard! swap 
+    loop {
+      1 - dup
+      0 >= lambda
+        @generator::next!
+        swap
+        @loop!
+      in jump?
+    } @loop! 
+
+    drop
+  in
+
+  func is _ in
+  value is 0 in
+  ref is _ in
+  // called to generate the next value
+  next is
+    @generator::value! dup @generator::func!!
+    -> @generator::value
+  in
+in
+
+lists {
+  guard is | in
+
+  len is
+    idx is -1 in
+    -1 -> @idx
+    loop {
+      @idx! pull @::guard! != lambda
+        @idx @std::dec!
+        @loop!
+      in jump?
+    } @loop!
+    @idx! 1 + -1 *
+  in
+
+  at is
+    index is _ in
+    -> @::index
+    @::len! -1 * @::index$ + pull
+  in
+  
+  fold is 
+    func is _ in
+    accu is _ in
+
+    -> @accu
+    -> @func
+
+    loop_start {
+      dup @lists::guard! != then {
+        @accu! @func! jump -> @accu
+        @loop_start!
+      } @std::if!
+    } @loop_start!
+
+    drop
+    @accu!
+  in
+
+  range is
+    from is _ in
+    to   is _ in
+    step is 1 in
+    -> @to
+    -> @from
+
+    @lists::guard$
+    lambda
+      (@to$ - @step$) -> @to
+      @to$
+      (@from$ < @to$)
+      loop?
+    in jump
+  in
+
+  // the provided function is expected to consume elementsS
+  foreach is
+    func is _ in
+    -> @func
+
+    lambda
+      @lists::foreach::func!!
+      dup @lists::guard$ != 
+      loop?
+    in jump
+
+    drop
+  in
+
+  join is 
+    sep is _ in
+    accu is "" in
+
+    -> @sep 
+    -> @accu
+
+    loop_start {
+      dup @lists::guard! != then {
+        @sep! @accu! + + -> @accu
+        @loop_start!
+      } @std::if!
+    } @loop_start!
+
+    drop
+    @accu!
+  in
+  "drop" is
+    lambda drop in @lists::foreach!
+  in
+  string is 
+    \space @lists::join!
+  in
+
+  find is
+    best is _ in
+    space is _ in
+    op is _ in
+    -> @lists::find::op
+    -> @lists::find::best
+
+    lambda 
+      dup -> @lists::find::space
+
+      @lists::find::best$ @op$! lambda 
+        @lists::find::space$ -> @lists::find::best
+      in jump?
+    in @lists::foreach!
+
+    @lists::find::best$
+  in
+
+  max is
+    lambda > in @lists::find!
+  in
+
+  min is
+    lambda < in @lists::find!
+  in
+
+  "dup" is 
+    lambda in @lists::map!
+  in
+
+  map is
+    func is _ in
+    len is _ in
+    idx is -1 in
+    -> @func
+
+    -1 -> @idx
+    @lists::len! -1 * 1 - -> @lists::map::len
+    @lists::guard!
+
+    lambda
+      @lists::map::len$ pull @func!!
+      @lists::map::idx @std::dec!
+      @lists::map::idx$ @lists::map::len$ >
+      loop?
+    in jump
+  in
+
+  minmax is
+    max is _ in
+    @lists::dup! @lists::max! -> @max @lists::min! @lists::minmax::max$
+  in
+}
+
+memory {
+  mem is _10000 in
+  idx is 0 in
+  free-list is _1000 in
+  free-list-len is 500 in
+  block-list is _1000 in
+  block-list-len is 500 in
+
+  init-free-list is
+    0 @memory::free-list-len$ @lists::range!
+    lambda
+      idx is _ in
+      2 * -> @idx
+      -1 @memory::free-list @idx$ + put
+      -1 @memory::free-list @idx$ + 1 + put
+    in @lists::foreach!
+  in
+
+  init-block-list is
+    0 @memory::block-list-len$ @lists::range!
+    lambda
+      idx is _ in
+      2 * -> @idx
+      -1 @memory::block-list @idx$ + put
+      -1 @memory::block-list @idx$ + 1 + put
+    in @lists::foreach!
+  in
+
+  // takes: position size
+  add-free-block is
+    size is _ in
+    position is _ in
+    idx is _ in
+    -> @size
+    -> @position
+    0 -> @idx
+
+    lambda
+      @memory::free-list @idx$ + 1 + get
+      (@idx$ + 2) -> @idx
+      -1 != loop?
+    in jump
+
+    @size$ @memory::free-list @idx$ 1 - + put
+    @position$ @memory::free-list @idx$ 2 - + put
+  in
+
+  // takes: position size
+  add-block is
+    size is _ in
+    position is _ in
+    idx is _ in
+    -> @size
+    -> @position
+    0 -> @idx
+
+    lambda
+      @memory::block-list @idx$ + 1 + get
+      (@idx$ + 2) -> @idx
+      -1 != loop?
+    in jump
+
+    @size$ @memory::block-list @idx$ 1 - + put
+    @position$ @memory::block-list @idx$ 2 - + put
+  in
+
+
+  // try to find a block to fuse with
+  try-fuse-free-blocks is
+    check-fusable is
+      
+    in
+    
+  in
+
+  init is
+    @memory::init-free-list!
+    @memory::init-block-list!
+    0 10000 @memory::add-free-block!
+  in
+
+  alloc is
+    idx is _ in
+    size is _ in
+    -> @size
+    0 -> @idx
+
+    // find space in the free list
+    lambda
+      @memory::free-list @idx$ + 1 + get
+      (@idx$ + 2) -> @idx
+      @size$ <= loop?
+    in jump
+
+    // TODO memory full?
+
+    size-ref is
+        @memory::free-list swap 1 - +
+    in
+    position-ref is
+        @memory::free-list swap 2 - +
+    in
+
+    // add entry to the block list
+    @idx$ @position-ref!$
+    @size$ @memory::add-block!
+
+    // update free-list entry
+    @memory::alloc::idx$ @size-ref!$ @size$ - @memory::alloc::idx$ @size-ref! put
+    @memory::mem @memory::alloc::idx$ @position-ref!$ +
+    @memory::alloc::idx$ @position-ref!$ @size$ + @memory::alloc::idx$ @position-ref! put
+    // TODO remove free-block if size == 0
+  in
+
+  free is
+    mem-offset is _ in
+    // find offset in mem
+    @memory::mem - -> @mem-offset
+
+    // find size of the block
+    idx is _ in
+    0 -> @idx
+    lambda
+      @memory::block-list @idx$ + get
+      (@idx$ + 2) -> @idx
+      @mem-offset$ != loop?
+    in jump
+
+    // add block to free list
+    @mem-offset$ @memory::block-list @idx$ 1 - + get @memory::add-free-block!
+
+    // remove block entry from block list
+    -1 @memory::block-list @memory::free::idx$ 1 - + put
+    -1 @memory::block-list @memory::free::idx$ 2 - + put
+  in
+
+  dump-free-list is
+    idx is _ in
+    0 -> @::idx
+    lambda
+      @::free-list @::idx$ + get -1 != lambda
+        position: print \space print
+        @::free-list @::idx$ + get print
+        \space print
+        size: print \space print
+        @::free-list @::idx$ + 1 + get print
+        \n print
+      in jump?
+      (@::idx$ + 2) -> @idx
+      @::idx$ @::free-list-len$ 2 * < loop?
+    in jump
+  in
+
+  dump-block-list is
+    idx is _ in
+    0 -> @::idx
+    lambda
+      @::block-list @::idx$ + get -1 != lambda
+        position: print \space print
+        @::block-list @::idx$ + get print
+        \space print
+        size: print \space print
+        @::block-list @::idx$ + 1 + get print
+        \n print
+      in jump?
+      (@::idx$ + 2) -> @idx
+      @::idx$ @::block-list-len$ 2 * < loop?
+    in jump
+  in
+}
+
+@memory::init!
+
+// functions for working with function local variables
+local {
+  stack is _100 in
+  stack-idx is -1 in
+
+  enter is
+    @local::stack-idx @std::inc!
+    dup @local::stack @local::stack-idx$ + put
+    dup 2 + @std::inc!
+    jump
+  in
+  exit is
+    @local::stack @local::stack-idx$ + get 2 + @std::dec! 
+    @local::stack-idx @std::dec!
+  in
+  access is @local::stack @local::stack-idx$ + get 2 + get + in
+  "get" is @local::access! get in
+  "put" is @local::access! put in
+}
+
+
+linked-list is
+  element is value next in
+
+  // initial value -> reference
+  new is
+    ref is _ in
+    2 @memory::alloc! -> @::ref
+    @::ref$ put -1 @::ref$ 1 + put
+    @::ref$
+  in
+
+  next-item is
+    dup -1 == not lambda
+      1 + get
+    in jump?
+  in
+
+  last-item is
+    ref is _ in -> @::ref
+
+    // find the end
+    @::ref$ 1 + get -1 == not
+    lambda
+      @::ref$ 1 + get -> @::ref
+      @::ref$ 1 + get -1 == not
+      loop?
+    in jump?
+    @::ref$
+  in
+
+  // value ref
+  push is
+    ref is _ in
+    @::last-item! -> @::ref
+
+    // add element to the end
+    @::new! @::ref$ 1 + put
+  in
+
+  // ref
+  dump is
+    ref is _ in -> @::ref
+
+    [ print
+    @::ref$$ print
+    // find the end
+    @::ref$ 1 + get -1 == not
+    lambda
+      @::ref$ 1 + get -> @::ref
+      "," print \space print @::ref$$ print
+      @::ref$ 1 + get -1 == not
+      loop?
+    in jump?
+    ] print
+    \n print
+  in
+
+  pop is
+    // TODO: Handle list with only one item
+    this is _ in -> @::this
+    next is _ in
+    @::this$ @::next-item! -> @::next
+
+    @::next$ @::next-item! -1 == not
+    lambda
+      @::next$ -> @::this
+      @::next$ @::next-item! -> @::next
+      @::next$ 
+      @::next-item! -1 == not
+      loop?
+    in jump?
+
+    @::next$$
+    @::next$ @memory::free!
+    -1 @::this$ 1 + put
+  in
+
+  len is
+    ref is _ in -> @::ref
+    count is _ in 1 -> @count
+
+    @::ref$ 1 + get -1 == not
+    lambda
+      @::count$ 1 + -> @::count
+      @::ref$ 1 + get -> @::ref
+      @::ref$ 1 + get -1 == not
+      loop?
+    in jump?
+
+    @::count$
+  in
+
+  // takes index, ref
+  at is
+    ref is _ in -> @::ref
+
+    0 swap lambda
+      drop
+      @::ref$ @::next-item! -> @::ref
+    in @std::loop-range!
+
+    @::ref$$
+  in
+
+  delete is
+    // TODO
+  in
+in
+
+stuff is
+  ll1 is _ in
+  ll2 is _ in
+  ll3 is _ in
+  ll4 is _ in
+
+  0 @linked-list::new! -> @ll3
+  1 20 @lists::range! lambda @ll3$ @linked-list::push! in @lists::foreach!
+
+  1 @linked-list::new! -> @ll4
+
+  5 @linked-list::new! -> @ll1
+  3 @linked-list::new! -> @ll2
+  10 @ll1$ @linked-list::push!
+  4 @ll2$ @linked-list::push!
+  11 @ll1$ @linked-list::push!
+  5 @ll2$ @linked-list::push!
+  17 @ll1$ @linked-list::push!
+  6 @ll2$ @linked-list::push!
+  7 @ll2$ @linked-list::push!
+  8 @ll2$ @linked-list::push!
+  9 @ll2$ @linked-list::push!
+  10 @ll2$ @linked-list::push!
+
+
+  @ll1$ @linked-list::dump!
+  length: print \space print @ll1$ @linked-list::len! @std::println!
+
+  @ll2$ @linked-list::dump!
+  length: print \space print @ll2$ @linked-list::len! @std::println!
+
+  @ll3$ @linked-list::dump!
+  length: print \space print @ll3$ @linked-list::len! @std::println!
+
+  @ll3$ @linked-list::pop! @std::println!
+  @ll3$ @linked-list::pop! @std::println!
+  @ll3$ @linked-list::pop! @std::println!
+  @ll3$ @linked-list::pop! @std::println!
+
+  @ll3$ @linked-list::dump!
+  length: print \space print @ll3$ @linked-list::len! @std::println!
+
+  1 @ll1$ @linked-list::at! @std::println!
+in
+
+@stuff!
+@stuff!
+@stuff!
+@stuff!
+@stuff!
+

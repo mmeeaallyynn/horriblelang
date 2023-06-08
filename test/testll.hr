@@ -41,4 +41,4 @@ length: print \space print @ll3$ @linked-list::len! @std::println!
 @ll3$ @linked-list::dump!
 length: print \space print @ll3$ @linked-list::len! @std::println!
 
-1 @ll1$ @linked-list::at! @std::println!
+1 @ll1$ @linked-list::at!$ @std::println!

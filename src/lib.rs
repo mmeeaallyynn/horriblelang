@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::fmt;
 use regex::Regex;
 use std::convert::TryInto;
+use termion::raw::IntoRawMode;
+use std::io::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Visibility {
@@ -41,6 +43,7 @@ pub enum Command {
     NamedReference(String, usize),
     AbsoluteReference(usize),
     Print,
+    Getc,
     Not,
     Dup,
     Swap,
@@ -551,6 +554,13 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                     None => println!("Stack underflow!")
                 };
             },
+            Command::Getc => {
+                let mut stdout = std::io::stdout().into_raw_mode();
+                let mut stdin = std::io::stdin();
+                let mut input = [0; 1];
+                stdin.read(&mut input).unwrap();
+                env.stack.push(StackSlot::Number(input[0] as f64));
+            },
             Command::ArrowPut => {
                 let value: Command;
                 match env.stack.pop() {
@@ -715,6 +725,7 @@ fn parser(env: &mut Environment) -> Result<(), RuntimeError> {
             },
             Command::Lambda(_) => {
                 env.prefix.push("lambda".into());
+                env.level += 1;
                 define_stack.push(env.idx);
             },
             Command::EndDefine => {
@@ -800,6 +811,8 @@ fn lexer(program: String) -> Environment {
                     Command::Include,
                 "STACK" =>
                     Command::PrintStack,
+                "getc" =>
+                    Command::Getc,
                 "{" =>
                     Command::Define(Visibility::Public, 0),
                 "}" =>
@@ -879,7 +892,7 @@ fn lexer(program: String) -> Environment {
                     }
 
                     Command::Pushs(String::from(&string)
-                        .get(1..string.len() - 1).unwrap()
+                        .get(1..string.len() - 1).expect(&format!("failed parsing string: {}", s))
                         .replace("\\\"", "\"")
                         .replace("\\n", "\n"))
                 },

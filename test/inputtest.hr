@@ -1,0 +1,52 @@
+"std.hr" include
+
+index is 0 in
+
+lines is
+    "this is line number one"
+    "this is line number two"
+    "a third one"
+    "thats it"
+in
+
+begin-highlight is
+    "" 27 + 91 + 55 + 109 + print
+in
+
+end-highlight is
+    "" 27 + 91 + 50 + 55 + 109 + print
+in
+
+draw-screen is
+    @clear-screen!
+    0 4 @lists::range! lambda
+        dup @index$ == lambda
+            @begin-highlight!
+        in jump?
+
+        dup @lines swap + get @std::println!
+
+        @index$ == lambda
+            @end-highlight!
+        in jump?
+    in @lists::foreach!
+
+    @read-char!
+
+    dup "up" == lambda
+        (@index$ - 1) 0 @std::max! -> @index
+    in jump?
+
+    dup "down" == lambda
+        (@index$ + 1) 3 @std::min! -> @index
+    in jump?
+
+    "q" != loop?
+in
+
+@draw-screen!
+
+STACK
+
+
+

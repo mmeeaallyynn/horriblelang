@@ -103,9 +103,29 @@ std {
       @::idx$ @::len$ < loop?
     in jump?
   in
+
+  min is
+    a is _ in
+    -> @::a
+
+    dup @a$ > lambda
+        drop @a$
+    in jump?
+  in
+
+  max is
+    a is _ in
+    -> @::a
+
+    dup @a$ < lambda
+        drop @a$
+    in jump?
+  in
 }
 
 "generator.hr" include
 "lists.hr" include
 "memory.hr" include
+"ascii.hr" include
+
 

@@ -53,3 +53,29 @@ clear-screen is
     \space 27 + c + print
 in
 
+number-to-string is 
+    buffer is _10 in
+    idx is _ in
+    0 -> @idx
+
+    parse-loop is
+        dup 10 % dup @::buffer @::idx$ + put
+        @::idx @std::inc!
+        - 10 /
+        @::buffer @::idx$ 1 - + get swap
+        dup 0 > loop?
+    in
+    | swap @parse-loop! drop
+
+    "" lambda swap 48 + + in @lists::reduce!
+in
+
+set-position is
+    "" 27 + 91 + 
+    swap @number-to-string! +
+    ";" +
+    swap @number-to-string! +
+    "H" +
+    print
+in
+

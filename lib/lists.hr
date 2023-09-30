@@ -1,148 +1,164 @@
 
 lists {
-  guard is | in
+    guard is | in
 
-  len is
-    idx is -1 in
-    -1 -> @idx
-    loop {
-      @idx! pull @::guard! != lambda
-        @idx @std::dec!
-        @loop!
-      in jump?
-    } @loop!
-    @idx! 1 + -1 *
-  in
+    len is
+        idx is -1 in
+        -1 -> @idx
+        loop {
+            @idx! pull @::guard! != lambda
+                @idx @std::dec!
+                @loop!
+            in jump?
+        } @loop!
+        @idx! 1 + -1 *
+    in
 
-  at is
-    index is _ in
-    -> @::index
-    @::len! -1 * @::index$ + pull
-  in
+    at is
+        index is _ in
+        -> @::index
+        @::len! -1 * @::index$ + pull
+    in
 
-  fold is 
-    func is _ in
-    accu is _ in
+    fold is 
+        func is _ in
+        accu is _ in
 
-    -> @accu
-    -> @func
+        -> @accu
+        -> @func
 
-    loop_start {
-      dup @lists::guard! != then {
-        @accu! @func! jump -> @accu
-        @loop_start!
-      } @std::if!
-    } @loop_start!
+        loop_start {
+            dup @lists::guard! != then {
+                @accu! @func! jump -> @accu
+                @loop_start!
+            } @std::if!
+        } @loop_start!
 
-    drop
-    @accu!
-  in
+        drop
+        @accu!
+    in
 
-  range is
-    from is _ in
-    to   is _ in
-    step is 1 in
-    -> @to
-    -> @from
+    range is
+        from is _ in
+        to     is _ in
+        step is 1 in
+        -> @to
+        -> @from
 
-    @lists::guard$
-    lambda
-      (@to$ - @step$) -> @to
-      @to$
-      (@from$ < @to$)
-      loop?
-    in jump
-  in
+        @lists::guard$
+        lambda
+            (@to$ - @step$) -> @to
+            @to$
+            (@from$ < @to$)
+            loop?
+        in jump
+    in
 
-  // the provided function is expected to consume elementsS
-  foreach is
-    func is _ in
-    -> @func
+    // the provided function is expected to consume elementsS
+    foreach is
+        func is _ in
+        -> @func
 
-    lambda
-      @lists::foreach::func!!
-      dup @lists::guard$ != 
-      loop?
-    in jump
+        lambda
+            @lists::foreach::func!!
+            dup @lists::guard$ != 
+            loop?
+        in jump
 
-    drop
-  in
+        drop
+    in
 
-  join is 
-    sep is _ in
-    accu is "" in
+    reduce is
+        func is _ in
+        accu is _ in
+        -> @func
+        -> @accu
 
-    -> @sep 
-    -> @accu
+        lambda
+            -2 pull @lists::guard! !=
+            swap @::accu! @::func$! -> @::accu
+            loop?
+        in jump
 
-    loop_start {
-      dup @lists::guard! != then {
-        @sep! @accu! + + -> @accu
-        @loop_start!
-      } @std::if!
-    } @loop_start!
+        drop
+        @::accu$
+    in
 
-    drop
-    @accu!
-  in
-  "drop" is
-    lambda drop in @lists::foreach!
-  in
-  string is 
-    \space @lists::join!
-  in
+    join is 
+        sep is _ in
+        accu is "" in
 
-  find is
-    best is _ in
-    space is _ in
-    op is _ in
-    -> @lists::find::op
-    -> @lists::find::best
+        -> @sep 
+        -> @accu
 
-    lambda 
-      dup -> @lists::find::space
+        loop_start {
+            dup @lists::guard! != then {
+                @sep! @accu! + + -> @accu
+                @loop_start!
+            } @std::if!
+        } @loop_start!
 
-      @lists::find::best$ @op$! lambda 
-        @lists::find::space$ -> @lists::find::best
-      in jump?
-    in @lists::foreach!
+        drop
+        @accu!
+    in
+    "drop" is
+        lambda drop in @lists::foreach!
+    in
+    string is 
+        \space @lists::join!
+    in
 
-    @lists::find::best$
-  in
+    find is
+        best is _ in
+        space is _ in
+        op is _ in
+        -> @lists::find::op
+        -> @lists::find::best
 
-  max is
-    lambda > in @lists::find!
-  in
+        lambda 
+            dup -> @lists::find::space
 
-  min is
-    lambda < in @lists::find!
-  in
+            @lists::find::best$ @op$! lambda 
+                @lists::find::space$ -> @lists::find::best
+            in jump?
+        in @lists::foreach!
 
-  "dup" is 
-    lambda in @lists::map!
-  in
+        @lists::find::best$
+    in
 
-  map is
-    func is _ in
-    len is _ in
-    idx is -1 in
-    -> @func
+    max is
+        lambda > in @lists::find!
+    in
 
-    -1 -> @idx
-    @lists::len! -1 * 1 - -> @lists::map::len
-    @lists::guard!
+    min is
+        lambda < in @lists::find!
+    in
 
-    lambda
-      @lists::map::len$ pull @func!!
-      @lists::map::idx @std::dec!
-      @lists::map::idx$ @lists::map::len$ >
-      loop?
-    in jump
-  in
+    "dup" is 
+        lambda in @lists::map!
+    in
 
-  minmax is
-    max is _ in
-    @lists::dup! @lists::max! -> @max @lists::min! @lists::minmax::max$
-  in
+    map is
+        func is _ in
+        len is _ in
+        idx is -1 in
+        -> @func
+
+        -1 -> @idx
+        @lists::len! -1 * 1 - -> @lists::map::len
+        @lists::guard!
+
+        lambda
+            @lists::map::len$ pull @func!!
+            @lists::map::idx @std::dec!
+            @lists::map::idx$ @lists::map::len$ >
+            loop?
+        in jump
+    in
+
+    minmax is
+        max is _ in
+        @lists::dup! @lists::max! -> @max @lists::min! @lists::minmax::max$
+    in
 }
 

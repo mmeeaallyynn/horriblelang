@@ -6,6 +6,8 @@ use std::fmt;
 use regex::Regex;
 use std::convert::TryInto;
 use termion::raw::IntoRawMode;
+use termion::async_stdin;
+use std::{thread, time};
 use std::io::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +57,7 @@ pub enum Command {
     Lambda(usize),
     Return,
     Pull,
+    Sleep,
 
     Nop,
     Include,
@@ -92,7 +95,8 @@ pub struct Environment {
     source: Vec<SourceReference>,
     idx: usize,
     pub execute: bool,
-    level: u32
+    level: u32,
+    includes: Vec<String>
 }
 
 impl Environment {
@@ -105,7 +109,8 @@ impl Environment {
             source,
             idx: 0,
             execute: true,
-            level: 0
+            level: 0,
+            includes: Vec::new()
         }
     }
 
@@ -118,7 +123,8 @@ impl Environment {
             source: from.source,
             idx: from.idx,
             execute: from.execute,
-            level: from.level
+            level: from.level,
+            includes: from.includes
         }
     }
 
@@ -201,8 +207,10 @@ impl fmt::Display for RuntimeError {
         let info_start_idx = isize::max(0, self.env.idx as isize - 10) as usize;
         let info_end_idx = isize::min(self.env.source.len() as isize, self.env.idx as isize + 10) as usize;
         write!(f,
-            "RuntimeError: {}\ncallstack: {:#?}\n",
+            "RuntimeError {}: {}\nstack: {:#?}\ncallstack: {:#?}\n",
+            self.env.source[self.env.idx],
             self.msg,
+            self.env.stack,
             call_info)?;
         write!(f, "Around here: {}", self.env.source[info_start_idx..info_end_idx].iter()
             .map(|sr| match sr {
@@ -229,6 +237,7 @@ impl fmt::Display for SourceReference {
 }
 
 fn run(env: &mut Environment) -> Result<(), RuntimeError> {
+    let mut stdin_reader = async_stdin();
     let mut call_stack: Vec<(usize, usize)> = Vec::new();
 
     while env.idx < env.program.len() { 
@@ -240,11 +249,18 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                     env.define_here(string, here);
                 }
                 env.stack.pop();
-            }
+            },
             Command::Nop => { },
             Command::Include => {
                 let filename = env.stack.pop_string()
                     .ok_or_else(|| RuntimeError::new("expected file name for include".into(), &call_stack, env))?;
+
+                if env.includes.contains(&filename) {
+                    env.idx += 1;
+                    continue;
+                }
+
+                env.includes.push(filename.clone());
                 let content = fs::read_to_string(filename.clone())
                     .or_else(|_err| fs::read_to_string(format!("lib/{}", filename)))
                     .map_err(|err| RuntimeError::new(format!("unable to read include file: {}", err), &call_stack, env))?;
@@ -505,7 +521,7 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                         (StackSlot::Number(_), StackSlot::String(_)) =>
                             env.stack.push(StackSlot::Number(1.0)),
                         _ => {
-                            env.stack.push(StackSlot::Number(0.0))
+                            env.stack.push(StackSlot::Number(1.0))
                         }
                     }
                 } else {
@@ -556,10 +572,13 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
             },
             Command::Getc => {
                 let mut stdout = std::io::stdout().into_raw_mode();
-                let mut stdin = std::io::stdin();
                 let mut input = [0; 1];
-                stdin.read(&mut input).unwrap();
-                env.stack.push(StackSlot::Number(input[0] as f64));
+                if let Ok(_) = stdin_reader.read_exact(&mut input) {
+                    env.stack.push(StackSlot::Number(input[0] as f64));
+                }
+                else {
+                    env.stack.push(StackSlot::Number(-1.0));
+                }
             },
             Command::ArrowPut => {
                 let value: Command;
@@ -682,6 +701,12 @@ fn run(env: &mut Environment) -> Result<(), RuntimeError> {
                 else {
                     return Err(RuntimeError::new("needs a string to convert into number list".into(), &call_stack, env));
                 },
+            Command::Sleep => if let StackSlot::Number(n) = env.stack.pop().unwrap() {
+                    thread::sleep(time::Duration::from_secs_f64(n));
+                }
+                else {
+                    return Err(RuntimeError::new("sleep needs a number input".into(), &call_stack, env));
+                }
             _ => {}
         }
 
@@ -877,6 +902,8 @@ fn lexer(program: String) -> Environment {
                     Command::AddressOf,
                 "print" =>
                     Command::Print,
+                "__sleep" =>
+                    Command::Sleep,
                 "_" => 
                     Command::Return,
                 s if s == "\\space" => {

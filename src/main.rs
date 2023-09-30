@@ -10,7 +10,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let arg_string = args.iter().map(|i| { format!("\"{}\"", i) }).collect::<Vec<String>>().join(" ");
-    horrible::run_string(&mut env, &format!("| {}", arg_string))
+    horrible::run_string(&mut env, &format!("std.hr include | {}", arg_string))
         .expect("unable to parse arguments");
 
     let mut rl = Editor::<()>::new();

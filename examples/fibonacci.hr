@@ -1,4 +1,4 @@
-"std.nl" include
+"std.hr" include
 
 fibonacci is
 	a is 0 in

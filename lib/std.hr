@@ -127,5 +127,5 @@ std {
 "lists.hr" include
 "memory.hr" include
 "ascii.hr" include
-
+"rng.hr" include
 

@@ -1,0 +1,11 @@
+rng is
+    a is 17247 in
+    c is 123 in
+    m is 32768 in
+    seed is 0 in
+
+    next is
+        ((@::a$ * @::seed$) + @::c$) @::m$ % dup -> @::seed
+    in
+in
+

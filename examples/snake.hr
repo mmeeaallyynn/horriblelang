@@ -1,0 +1,172 @@
+"std.hr" include
+"ringbuffer.hr" include
+
+point is
+    // x y -- reference
+    new is
+        x is _ in
+        y is _ in
+        -> @::y
+        -> @::x
+
+        2 @memory::alloc!
+        dup     @::x$ swap put
+        dup 1 + @::y$ swap put
+    in
+
+    get-x is
+        get
+    in
+
+    get-y is
+        1 + get
+    in
+
+    set-x is
+        put
+    in
+
+    set-y is
+        1 + put
+    in
+
+    "get" is
+        dup get swap 1 + get
+    in
+
+    "print" is
+        dup get swap 1 + get swap
+        @number-to-string! print \space print
+        @number-to-string! @std::println!
+    in
+in
+
+snake is
+    extend is 0 in
+    new is
+        5000 @ringbuffer::new!
+
+        10 10 @point::new! @ringbuffer::push-end!
+        10 11 @point::new! @ringbuffer::push-end!
+        10 12 @point::new! @ringbuffer::push-end!
+        @ringbuffer::dump!
+    in
+
+    draw is
+        | @ringbuffer::dump! lambda
+            @point::get! @set-position! o @std::println!
+        in @lists::foreach!
+    in
+
+    check-collision is
+        head is _ in
+        collision is _ in
+        @ringbuffer::get-end! -> @::head
+        0 -> @::collision
+
+        | @ringbuffer::dump! lambda
+            @point::get!
+            @::head$ @point::get-y! ==
+            swap @::head$ @point::get-x! == * @::collision$ + -> @::collision
+        in @lists::foreach!
+
+        // the head always reports a collision, so subtract one
+        @::collision$ 1 -
+    in
+
+    step is
+        tail is _ in 
+        head is _ in
+        @ringbuffer::get-end! -> @::head
+
+        @::extend$ 0 == dup lambda
+            @ringbuffer::pop-start! -> @::tail
+        in jump?
+        not lambda
+            0 0 @point::new! -> @::tail
+        in jump?
+
+        dup "left" == lambda
+            @::head$ @point::get-x! 2 - @::tail$ @point::set-x!
+            @::head$ @point::get-y! @::tail$ @point::set-y!
+        in jump?
+
+        dup "right" == lambda
+            @::head$ @point::get-x! 2 + @::tail$ @point::set-x!
+            @::head$ @point::get-y! @::tail$ @point::set-y!
+        in jump?
+
+        dup "up" == lambda
+            @::head$ @point::get-x! @::tail$ @point::set-x!
+            @::head$ @point::get-y! 1 - @::tail$ @point::set-y!
+        in jump?
+
+        "down" == lambda
+            @::head$ @point::get-x! @::tail$ @point::set-x!
+            @::head$ @point::get-y! 1 + @::tail$ @point::set-y!
+        in jump?
+
+        @::tail$ @ringbuffer::push-end!
+        0 -> @::extend
+    in
+in
+
+
+game is 
+    direction is "right" in
+    food is _ in
+    score is 0 in
+
+    draw-score is
+        0 0 @set-position! @::score$ @std::println!
+    in
+
+    draw-food is
+        @::food$ @point::get! @set-position! x @std::println!
+    in
+
+    check-food is
+        @ringbuffer::get-end! @point::get!
+        @::food$ @point::get-y! == swap
+        @::food$ @point::get-x! == *
+
+        lambda
+            1 -> @snake::extend
+            @::score @std::inc!
+
+            @rng::next! 50 % 2 * @::food$ @point::set-x!
+            @rng::next! 50 % @::food$ @point::set-y!
+        in jump?
+    in
+
+    5 -> @rng::seed
+    @rng::next! 50 % 2 *
+    @rng::next! 50 %
+    @point::new! -> @::food
+
+    loop is
+        @clear-screen!
+        @snake::draw!
+        @::draw-food!
+        @::check-food!
+        @::draw-score!
+
+        @read-char!
+        dup "e" == lambda
+            1 -> @snake::extend
+            drop @::direction$
+        in jump?
+        dup "\x00" != lambda
+            dup -> @::direction
+        in jump?
+
+        @::direction$ @snake::step!
+        0.05 __sleep
+
+        "q" != @snake::check-collision! not * loop?
+    in
+    @loop!
+in
+
+@snake::new!
+@game!

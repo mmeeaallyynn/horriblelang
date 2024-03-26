@@ -1,0 +1,99 @@
+"std.hr" include
+
+
+ringbuffer is
+    start-idx is 0 in
+    end-idx is 0 in
+    capacity is 0 in
+    length is 0 in
+    reference is _ in
+
+    // capacity -- reference to memory
+    new is
+        -> @::capacity
+        0 -> @::start-idx
+        0 -> @::end-idx
+        0 -> @::length
+
+        @::capacity$ @memory::alloc! -> @::reference
+    in
+
+    // -- reference to info
+    // info memory layout:
+    // start-idx length capacity memory-reference
+    save is
+        4 @memory::alloc!
+        dup     @::start-idx$ swap put
+        dup 1 + @::length$ swap put
+        dup 2 + @::capacity$ swap put
+        dup 3 + @::reference$ swap put
+    in
+
+    load is
+        dup     get -> @::start-idx
+        dup 1 + get -> @::length
+        dup 2 + get -> @::capacity
+            3 + get -> @::reference 
+
+        @::start-idx$ @::length$ + @::capacity$ % -> @::end-idx
+    in
+
+    // element --
+    push-end is
+        @::reference$ @::end-idx$ + put
+        @::end-idx @::inc-wrap!
+        @::length @std::inc!
+    in
+
+    // -- last element
+    pop-end is
+        @::end-idx @::dec-wrap!
+        @::reference$ @::end-idx$ + get
+        @::length @std::dec!
+    in
+
+    // element --
+    push-start is
+        @::start-idx @::dec-wrap!
+        @::reference$ @::start-idx$ + put
+        @::length @std::inc!
+    in
+
+    // -- first element
+    pop-start is
+        @::reference$ @::start-idx$ + get
+        @::start-idx @::inc-wrap!
+        @::length @std::dec!
+    in
+
+    get-start is
+        @::reference$ @::start-idx$ + get
+    in
+
+    get-end is
+        @::reference$ @::end-idx$ 1 - @::capacity$ + @::capacity$ % + get
+    in
+
+    dump is
+        idx is _ in @::start-idx$ -> @::idx
+        lambda
+            @::reference$ @::idx$ + get
+            @::idx @::inc-wrap!
+
+            (@::idx$ != @::end-idx$) loop?
+        in jump
+    in
+
+    inc-wrap is
+        idx-ref is _ in -> @idx-ref
+
+        @::idx-ref$$ 1 + @::capacity$ % @::idx-ref$ put
+    in
+
+    dec-wrap is
+        idx-ref is _ in -> @idx-ref
+
+        @::idx-ref$$ 1 - @::capacity$ + @::capacity$ % @::idx-ref$ put
+    in
+in
+
